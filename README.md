@@ -1,4 +1,6 @@
 # Zero-to-Hero: Zero-Shot Initialization Empowering Reference-Based Video Appearance Editing
+<a href="https://arxiv.org/abs/2505.23134"><img src='https://img.shields.io/badge/arXiv-2501.11325-red?style=flat&logo=arXiv&logoColor=red' alt='arxiv'></a>&nbsp;
+<a href="https://zero2hero-project.github.io/"><img src='https://img.shields.io/badge/Project-Page-Green' alt='GitHub'></a>&nbsp;
 
 # Abstract
 Appearance editing in video according to user needs is a pivotal task in video editing. Existing text-guided methods often lead to ambiguities regarding user intentions and restrict fine-grained control over editing specific aspects of objects. To overcome these limitations, this paper introduces a novel approach named \emph{Zero2Hero}, which focuses on reference-based video editing that disentangles the editing process into two distinct problems. It achieves this by first editing an anchor frame to satisfy user requirements as a reference image and then consistently propagating its appearance across other frames. 
