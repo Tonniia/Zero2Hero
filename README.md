@@ -32,7 +32,10 @@ Our method contains two stages.
 ```
 python ./Zero_Stage/run_zero.py
 ```
-- We have provided intermediate result, saved in `./_result/zero_stage/1.0_1.0_k=1_100`
+<!-- - We have provided intermediate result, saved in `./_result/zero_stage/1.0_1.0_k=1_100` -->
+
+- Zero-Stage with Adaptive-k strategy have been accepted by IJCAI 2025 AI, the Arts and Creativity track ([paper](assets/tongtong_IJCAI25.pdf)). We further explore few-shot training without hand-craft design, with an addtional Hero-Stage:
+
 ## Hero-Stage
 - add Hero-Stage training data jsons at `./_input/_json/hero_stage/`
     - We have prepared json of *car-turn*, named as `{appearance_name}_2cond_1pairs.jsonl`. 2cond represent conditional Mode 2 with explicit injection of target frame. 1pairs represent we use ONE data pair b, in Table 1 of paper.
@@ -50,8 +53,8 @@ export TRAIN_DATA="{training data json}"
     - `./ckpt`: saved LoRAs
     - `./configs`: backup code and jsons 
     - `./output`: 
-        - __eval_log__.txt: eval PSNR
-        - lora_{step}_enhance_{i}.jpg: inference result from `eval_json_path` at that step.
+        - `__eval_log__.txt`: eval PSNR
+        - `lora_{step}_enhance_{i}.jpg`: inference result from `eval_json_path` at that step.
     
 
 <!-- # Experiments -->
