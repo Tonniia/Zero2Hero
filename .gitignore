@@ -1,0 +1,9 @@
+.venv
+_result/
+_input
+.DS_Store
+*.pyc
+__pycache__
+_ignore
+Hero_dev/
+_pretrained_model/
