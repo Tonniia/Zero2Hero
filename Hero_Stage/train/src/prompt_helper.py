@@ -10,6 +10,11 @@ def load_text_encoders(args, class_one, class_two):
     )
     return text_encoder_one, text_encoder_two
 
+def load_t5_encoders(args, pretrained_model_name_or_path, class_one, class_two):
+    text_encoder_two = class_two.from_pretrained(
+        pretrained_model_name_or_path, subfolder="text_encoder_2", revision=args.revision, variant=args.variant
+    )
+    return None, text_encoder_two
 
 def tokenize_prompt(tokenizer, prompt, max_sequence_length):
     text_inputs = tokenizer(
@@ -203,3 +208,26 @@ def encode_token_ids(text_encoders, tokens, accelerator, num_images_per_prompt=1
     text_ids = torch.zeros(prompt_embeds.shape[1], 3).to(device=accelerator.device, dtype=dtype)
 
     return prompt_embeds, pooled_prompt_embeds, text_ids
+
+def encode_token_ids_t5only(text_encoders, tokens, accelerator, num_images_per_prompt=1, device=None):
+    text_encoder_t5 = text_encoders[0]
+    tokens_t5 = tokens[0]
+    batch_size = tokens_t5.shape[0]
+
+    if device == "cpu":
+        device = "cpu"
+    else:
+        device = accelerator.device
+
+    # t5
+    prompt_embeds = text_encoder_t5(tokens_t5.to(device))[0]
+    dtype = text_encoder_t5.dtype
+    prompt_embeds = prompt_embeds.to(dtype=dtype, device=accelerator.device)
+    _, seq_len, _ = prompt_embeds.shape
+    # duplicate text embeddings and attention mask for each generation per prompt, using mps friendly method
+    prompt_embeds = prompt_embeds.repeat(1, num_images_per_prompt, 1)
+    prompt_embeds = prompt_embeds.view(batch_size * num_images_per_prompt, seq_len, -1)
+
+    text_ids = torch.zeros(prompt_embeds.shape[1], 3).to(device=accelerator.device, dtype=dtype)
+
+    return prompt_embeds, None, text_ids

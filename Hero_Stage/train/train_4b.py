@@ -44,13 +44,15 @@ from diffusers.utils import (
 
 from src.prompt_helper import *
 from src.lora_helper import *
-from src.pipeline import FluxPipeline, resize_position_encoding, prepare_latent_subject_ids
+from src.pipeline_bria import BriaPipeline, resize_position_encoding, prepare_latent_subject_ids
 
 from src.layers import MultiDoubleStreamBlockLoraProcessor, MultiSingleStreamBlockLoraProcessor
 # from src.layers_ import MultiDoubleStreamBlockLoraProcessor, MultiSingleStreamBlockLoraProcessor
 
-from src.transformer_flux import FluxTransformer2DModel
+from src.transformer_bria import BriaTransformer2DModel
+
 from src.jsonl_datasets import make_train_dataset, collate_fn
+from src.jsonl_datasets import make_train_dataset_T5only
 
 if is_wandb_available():
     import wandb
@@ -155,7 +157,7 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
-        default="/data/vjuicefs_ai_camera_lgroup_ql/11187973/_ckpt/huggingface/Freepik/flux.1-lite-8B-alpha",
+        default="/data/vjuicefs_ai_camera_lgroup_ql/11187973/_ckpt/huggingface/briaai/BRIA-3.2",
         required=False,
         help="Path to pretrained model or model identifier from huggingface.co/models.",
     )
@@ -274,7 +276,7 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="./_result/tmp/Mode2/car_turn_rainbow",
+        default="./_result/tmp/Bria_Mode2/colorization",
         help="The output directory where the model predictions and checkpoints will be written.",
     )
     parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
@@ -566,23 +568,19 @@ def main(args):
             os.makedirs(args.output_dir, exist_ok=True)
 
     # Load the tokenizers
-    tokenizer_one = CLIPTokenizer.from_pretrained(
-        args.pretrained_model_name_or_path,
-        subfolder="tokenizer",
-        revision=args.revision,
-    )
+
     tokenizer_two = T5TokenizerFast.from_pretrained(
         args.pretrained_model_name_or_path,
-        subfolder="tokenizer_2",
+        subfolder="tokenizer",
         revision=args.revision,
     )
 
     # import correct text encoder classes
     text_encoder_cls_one = import_model_class_from_model_name_or_path(
-        args.pretrained_model_name_or_path, args.revision, subfolder="text_encoder"
+        "/data/vjuicefs_ai_camera_lgroup_ql/11187973/_ckpt/huggingface/black-forest-labs/FLUX.1-dev", args.revision, subfolder="text_encoder"
     )
     text_encoder_cls_two = import_model_class_from_model_name_or_path(
-        args.pretrained_model_name_or_path, args.revision, subfolder="text_encoder_2"
+        "/data/vjuicefs_ai_camera_lgroup_ql/11187973/_ckpt/huggingface/black-forest-labs/FLUX.1-dev", args.revision, subfolder="text_encoder_2"
     )
 
     # Load scheduler and models
@@ -590,21 +588,24 @@ def main(args):
         args.pretrained_model_name_or_path, subfolder="scheduler"
     )
     noise_scheduler_copy = copy.deepcopy(noise_scheduler)
-    text_encoder_one, text_encoder_two = load_text_encoders(args, text_encoder_cls_one, text_encoder_cls_two)
+    _, text_encoder_two = load_t5_encoders(
+        args, 
+        "/data/vjuicefs_ai_camera_lgroup_ql/11187973/_ckpt/huggingface/black-forest-labs/FLUX.1-dev", # clip and T5
+        text_encoder_cls_one, text_encoder_cls_two
+        )
     vae = AutoencoderKL.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="vae",
         revision=args.revision,
         variant=args.variant,
     )
-    transformer = FluxTransformer2DModel.from_pretrained(
+    transformer = BriaTransformer2DModel.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="transformer", revision=args.revision, variant=args.variant
     )
 
     # We only train the additional adapter LoRA layers
     transformer.requires_grad_(True)
     vae.requires_grad_(False)
-    text_encoder_one.requires_grad_(False)
     text_encoder_two.requires_grad_(False)
 
     # For mixed precision training we cast all non-trainable weights (vae, text_encoder and transformer) to half-precision
@@ -623,7 +624,6 @@ def main(args):
 
     vae.to(accelerator.device, dtype=weight_dtype)
     transformer.to(accelerator.device, dtype=weight_dtype)
-    text_encoder_one.to(accelerator.device, dtype=weight_dtype)
     text_encoder_two.to(accelerator.device, dtype=weight_dtype)
 
     if args.gradient_checkpointing:
@@ -653,7 +653,7 @@ def main(args):
                 
                 print("setting LoRA Processor for", name)
                 lora_attn_procs[name] = MultiDoubleStreamBlockLoraProcessor(
-                    dim=3072, ranks=args.ranks, network_alphas=args.network_alphas, lora_weights=[1 for _ in range(args.lora_num)], device=accelerator.device, dtype=weight_dtype, cond_width=args.cond_size, cond_height=args.cond_size, n_loras=args.lora_num
+                    dim=transformer.inner_dim, ranks=args.ranks, network_alphas=args.network_alphas, lora_weights=[1 for _ in range(args.lora_num)], device=accelerator.device, dtype=weight_dtype, cond_width=args.cond_size, cond_height=args.cond_size, n_loras=args.lora_num
                 )
                 
                 # Load the weights from the checkpoint dictionary into the corresponding layers
@@ -679,7 +679,7 @@ def main(args):
                 
                 print("setting LoRA Processor for", name)        
                 lora_attn_procs[name] = MultiSingleStreamBlockLoraProcessor(
-                    dim=3072, ranks=args.ranks, network_alphas=args.network_alphas, lora_weights=[1 for _ in range(args.lora_num)], device=accelerator.device, dtype=weight_dtype, cond_width=args.cond_size, cond_height=args.cond_size, n_loras=args.lora_num
+                    dim=transformer.inner_dim, ranks=args.ranks, network_alphas=args.network_alphas, lora_weights=[1 for _ in range(args.lora_num)], device=accelerator.device, dtype=weight_dtype, cond_width=args.cond_size, cond_height=args.cond_size, n_loras=args.lora_num
                 )
                 
                 # Load the weights from the checkpoint dictionary into the corresponding layers
@@ -703,12 +703,12 @@ def main(args):
             if name.startswith("transformer_blocks") and layer_index in double_blocks_idx:
                 print("setting LoRA Processor for", name)
                 lora_attn_procs[name] = MultiDoubleStreamBlockLoraProcessor(
-                    dim=3072, ranks=args.ranks, network_alphas=args.network_alphas, lora_weights=[1 for _ in range(args.lora_num)], device=accelerator.device, dtype=weight_dtype, cond_width=args.cond_size, cond_height=args.cond_size, n_loras=args.lora_num
+                    dim=transformer.inner_dim, ranks=args.ranks, network_alphas=args.network_alphas, lora_weights=[1 for _ in range(args.lora_num)], device=accelerator.device, dtype=weight_dtype, cond_width=args.cond_size, cond_height=args.cond_size, n_loras=args.lora_num
                 )
             elif name.startswith("single_transformer_blocks") and layer_index in single_blocks_idx:
                 print("setting LoRA Processor for", name)
                 lora_attn_procs[name] = MultiSingleStreamBlockLoraProcessor(
-                    dim=3072, ranks=args.ranks, network_alphas=args.network_alphas, lora_weights=[1 for _ in range(args.lora_num)], device=accelerator.device, dtype=weight_dtype, cond_width=args.cond_size, cond_height=args.cond_size, n_loras=args.lora_num
+                    dim=transformer.inner_dim, ranks=args.ranks, network_alphas=args.network_alphas, lora_weights=[1 for _ in range(args.lora_num)], device=accelerator.device, dtype=weight_dtype, cond_width=args.cond_size, cond_height=args.cond_size, n_loras=args.lora_num
                 )
             else:
                 lora_attn_procs[name] = attn_processor        
@@ -759,11 +759,11 @@ def main(args):
         eps=args.adam_epsilon,
     )
 
-    tokenizers = [tokenizer_one, tokenizer_two]
-    text_encoders = [text_encoder_one, text_encoder_two]
+    tokenizers = [tokenizer_two]
+    text_encoders = [text_encoder_two]
 
     # Dataset and DataLoaders creation:
-    train_dataset = make_train_dataset(args, tokenizers, accelerator)
+    train_dataset = make_train_dataset_T5only(args, tokenizers, accelerator)
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.train_batch_size,
@@ -772,8 +772,8 @@ def main(args):
         num_workers=args.dataloader_num_workers,
     )
 
-    vae_config_shift_factor = vae.config.shift_factor
-    vae_config_scaling_factor = vae.config.scaling_factor
+    vae_config_shift_factor = vae.config.shift_factor if vae.config.shift_factor != None else 0
+    vae_config_scaling_factor = vae.config.scaling_factor if vae.config.scaling_factor != None else 1
 
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
@@ -853,10 +853,9 @@ def main(args):
             models_to_accumulate = [transformer]
             with accelerator.accumulate(models_to_accumulate):
                 
-                tokens = [batch["text_ids_1"], batch["text_ids_2"]]
-                prompt_embeds, pooled_prompt_embeds, text_ids = encode_token_ids(text_encoders, tokens, accelerator)
+                tokens = [batch["text_ids_2"]]
+                prompt_embeds, _, text_ids = encode_token_ids_t5only(text_encoders, tokens, accelerator)
                 prompt_embeds = prompt_embeds.to(dtype=vae.dtype, device=accelerator.device)
-                pooled_prompt_embeds = pooled_prompt_embeds.to(dtype=vae.dtype, device=accelerator.device)
                 text_ids = text_ids.to(dtype=vae.dtype, device=accelerator.device)
                 
                 pixel_values = batch["pixel_values"].to(dtype=vae.dtype)
@@ -898,7 +897,7 @@ def main(args):
                 sigmas = get_sigmas(timesteps, n_dim=model_input.ndim, dtype=model_input.dtype)
                 noisy_model_input = (1.0 - sigmas) * model_input + sigmas * noise
 
-                packed_noisy_model_input = FluxPipeline._pack_latents(
+                packed_noisy_model_input = BriaPipeline._pack_latents(
                     noisy_model_input,
                     batch_size=model_input.shape[0],
                     num_channels_latents=model_input.shape[1],
@@ -920,7 +919,7 @@ def main(args):
                     sub_latent_image_ids = torch.concat([latent_subject_ids for _ in range(sub_number)], dim=-2)
                     latent_image_ids_to_concat.append(sub_latent_image_ids)
                     
-                    packed_subject_model_input = FluxPipeline._pack_latents(    
+                    packed_subject_model_input = BriaPipeline._pack_latents(    
                         subject_input,
                         batch_size=subject_input.shape[0],
                         num_channels_latents=subject_input.shape[1],
@@ -938,7 +937,7 @@ def main(args):
                     cond_latent_image_ids = torch.concat([cond_latent_image_ids for _ in range(cond_number)], dim=-2)
                     latent_image_ids_to_concat.append(cond_latent_image_ids)
 
-                    packed_cond_model_input = FluxPipeline._pack_latents(
+                    packed_cond_model_input = BriaPipeline._pack_latents(
                         cond_input,
                         batch_size=cond_input.shape[0],
                         num_channels_latents=cond_input.shape[1],
@@ -964,14 +963,13 @@ def main(args):
                     cond_hidden_states=cond_packed_noisy_model_input,
                     timestep=timesteps / 1000,
                     guidance=guidance,
-                    pooled_projections=pooled_prompt_embeds,
                     encoder_hidden_states=prompt_embeds,
                     txt_ids=text_ids,
                     img_ids=latent_image_ids,
                     return_dict=False,
                 )[0]
                 
-                model_pred = FluxPipeline._unpack_latents(
+                model_pred = BriaPipeline._unpack_latents(
                     model_pred,
                     height=int(pixel_values.shape[-2]),
                     width=int(pixel_values.shape[-1]),
@@ -1044,11 +1042,10 @@ def main(args):
 
             if accelerator.is_main_process:
                 if args.validation_prompt is not None and global_step % args.validation_steps == 0:
-                    pipeline = FluxPipeline.from_pretrained(
+                    pipeline = BriaPipeline.from_pretrained(
                         args.pretrained_model_name_or_path,
                         vae=vae,
-                        text_encoder=accelerator.unwrap_model(text_encoder_one),
-                        text_encoder_2=accelerator.unwrap_model(text_encoder_two),
+                        text_encoder=accelerator.unwrap_model(text_encoder_two),
                         transformer=accelerator.unwrap_model(transformer),
                         revision=args.revision,
                         variant=args.variant,

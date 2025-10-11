@@ -51,7 +51,7 @@ class LoRALinearLayer(nn.Module):
         shape = (batch_size, hidden_states.shape[1], 3072)
         mask = torch.ones(shape, device=hidden_states.device, dtype=dtype) 
         mask[:, :block_size+self.number*cond_size, :] = 0
-        mask[:, block_size+(self.number+self.n_loras)*cond_size:, :] = 0
+        mask[:, block_size+(self.number+1)*cond_size:, :] = 0
         hidden_states = mask * hidden_states
         ####
         
@@ -68,24 +68,20 @@ class MultiSingleStreamBlockLoraProcessor(nn.Module):
     def __init__(self, dim: int, ranks=[], lora_weights=[], network_alphas=[], device=None, dtype=None, cond_width=512, cond_height=512, n_loras=1):
         super().__init__()
         # Initialize a list to store the LoRA layers
-        
-        self.num_cond = n_loras
-        n_loras = 1
         self.n_loras = n_loras
-
         self.cond_width = cond_width
         self.cond_height = cond_height
         
         self.q_loras = nn.ModuleList([
-            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=self.num_cond)
+            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=n_loras)
             for i in range(n_loras)
         ])
         self.k_loras = nn.ModuleList([
-            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=self.num_cond)
+            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=n_loras)
             for i in range(n_loras)
         ])
         self.v_loras = nn.ModuleList([
-            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=self.num_cond)
+            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=n_loras)
             for i in range(n_loras)
         ])
         self.lora_weights = lora_weights
@@ -104,11 +100,30 @@ class MultiSingleStreamBlockLoraProcessor(nn.Module):
         query = attn.to_q(hidden_states) 
         key = attn.to_k(hidden_states) 
         value = attn.to_v(hidden_states) 
-        
+
+        batch_size = hidden_states.shape[0]
+        cond_size = self.cond_width // 8 * self.cond_height // 8 * 16 // 64
+        block_size =  hidden_states.shape[1] - cond_size * self.n_loras
+
+        from torch.utils.checkpoint import checkpoint
         for i in range(self.n_loras):
-            query = query + self.lora_weights[i] * self.q_loras[i](hidden_states)
-            key = key + self.lora_weights[i] * self.k_loras[i](hidden_states)
-            value = value + self.lora_weights[i] * self.v_loras[i](hidden_states)
+            start_idx = i * block_size
+            end_idx = (i + 1) * block_size
+            hidden_slice = hidden_states[:, start_idx:end_idx, :]
+            
+            def create_lora_update(lora_layer, hidden):
+                return self.lora_weights[i] * lora_layer(hidden)
+            
+            # 使用梯度检查点减少显存
+            query[:, start_idx:end_idx, :] += checkpoint(
+                create_lora_update, self.q_loras[i], hidden_slice
+            )
+            key[:, start_idx:end_idx, :] += checkpoint(
+                create_lora_update, self.k_loras[i], hidden_slice
+            )
+            value[:, start_idx:end_idx, :] += checkpoint(
+                create_lora_update, self.v_loras[i], hidden_slice
+            )
 
         inner_dim = key.shape[-1]
         head_dim = inner_dim // attn.heads
@@ -128,12 +143,12 @@ class MultiSingleStreamBlockLoraProcessor(nn.Module):
             key = apply_rotary_emb(key, image_rotary_emb)
 
         cond_size = self.cond_width // 8 * self.cond_height // 8 * 16 // 64
-        block_size =  hidden_states.shape[1] - cond_size * self.num_cond
+        block_size =  hidden_states.shape[1] - cond_size * self.n_loras
         scaled_cond_size = cond_size
         scaled_block_size = block_size
         scaled_seq_len = query.shape[2]
 
-        num_cond_blocks = self.num_cond
+        num_cond_blocks = self.n_loras
         mask = torch.ones((scaled_seq_len, scaled_seq_len), device=hidden_states.device)
         mask[ :scaled_block_size, :] = 0  # First block_size row
         for i in range(num_cond_blocks):
@@ -159,26 +174,23 @@ class MultiDoubleStreamBlockLoraProcessor(nn.Module):
         super().__init__()
         
         # Initialize a list to store the LoRA layers
-        self.num_cond = n_loras
-        n_loras = 1
         self.n_loras = n_loras
-
         self.cond_width = cond_width
         self.cond_height = cond_height
         self.q_loras = nn.ModuleList([
-            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=self.num_cond)
+            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=n_loras)
             for i in range(n_loras)
         ])
         self.k_loras = nn.ModuleList([
-            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=self.num_cond)
+            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=n_loras)
             for i in range(n_loras)
         ])
         self.v_loras = nn.ModuleList([
-            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=self.num_cond)
+            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=n_loras)
             for i in range(n_loras)
         ])
         self.proj_loras = nn.ModuleList([
-            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=self.num_cond)
+            LoRALinearLayer(dim, dim, ranks[i],network_alphas[i], device=device, dtype=dtype, cond_width=cond_width, cond_height=cond_height, number=i, n_loras=n_loras)
             for i in range(n_loras)
         ])
         self.lora_weights = lora_weights
@@ -250,12 +262,12 @@ class MultiDoubleStreamBlockLoraProcessor(nn.Module):
             key = apply_rotary_emb(key, image_rotary_emb)
 
         cond_size = self.cond_width // 8 * self.cond_height // 8 * 16 // 64 
-        block_size =  hidden_states.shape[1] - cond_size * self.num_cond
+        block_size =  hidden_states.shape[1] - cond_size * self.n_loras
         scaled_cond_size = cond_size
         scaled_seq_len = query.shape[2]
-        scaled_block_size = scaled_seq_len - cond_size * self.num_cond
+        scaled_block_size = scaled_seq_len - cond_size * self.n_loras
         
-        num_cond_blocks = self.num_cond
+        num_cond_blocks = self.n_loras
         mask = torch.ones((scaled_seq_len, scaled_seq_len), device=hidden_states.device)
         mask[ :scaled_block_size, :] = 0  # First block_size row
         for i in range(num_cond_blocks):

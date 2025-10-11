@@ -232,6 +232,14 @@ class style_transfer_module():
 
     
     def __modify_self_attn_qkv(self, name):
+        def _flip(x):
+            # x: [hw, c]
+            hw, c = x.shape[0], x.shape[1]
+            s = int(math.sqrt((self.h * self.w / hw)))
+            x = x.view(self.h//s, self.w//s, c).permute(2, 0, 1) # [c, h, w]
+            x = torch.flip(x, dims=[2]) 
+            x = x.reshape(hw, c)
+            return x
         def hook(model, input, output):
             if self.trigger_modify_qkv:
                 module_name = name # TODO
@@ -292,8 +300,9 @@ class style_transfer_module():
                     elif self.zero_mode == "wflip":
                         batch_size, hw, feature_dim = f_s.shape
                         modified_output = torch.zeros_like(f_s)
+                        indices_flip = torch.tensor(range(indices.shape[0]-1, -1, -1))
                         for b in range(batch_size):
-                            modified_output[b] = f_s[b]
+                            modified_output[b] = f_s[b][indices_flip]
 
                 return modified_output
             
@@ -406,6 +415,7 @@ if __name__ == "__main__":
                         latent_cs = (content_latent - content_latent.mean(dim=(2, 3), keepdim=True)) / (content_latent.std(dim=(2, 3), keepdim=True) + 1e-4) * style_latent.std(dim=(2, 3), keepdim=True) + style_latent.mean(dim=(2, 3), keepdim=True)
                     latent_cs = content_latent
                     # reverse process
+                    unet_wrapper.h, unet_wrapper.w = latent_cs.shape[-2], latent_cs.shape[-1]
                     print("Style transfer...")
                     images, latents = unet_wrapper.reverse_process(latent_cs, denoise_kwargs=denoise_kwargs, indices=indices) # reverse process save activations such as attn, res
                     

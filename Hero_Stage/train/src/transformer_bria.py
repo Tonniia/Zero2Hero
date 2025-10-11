@@ -23,6 +23,8 @@ from diffusers.utils.torch_utils import maybe_allow_in_graph
 from diffusers.models.embeddings import CombinedTimestepGuidanceTextProjEmbeddings, CombinedTimestepTextProjEmbeddings, FluxPosEmbed
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
 
+from diffusers.models.embeddings import TimestepEmbedding, apply_rotary_emb, get_timestep_embedding
+
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 @maybe_allow_in_graph
@@ -231,8 +233,44 @@ class FluxTransformerBlock(nn.Module):
 
         return encoder_hidden_states, hidden_states, cond_hidden_states if use_cond else None
 
+class BriaTimesteps(nn.Module):
+    def __init__(
+        self, num_channels: int, flip_sin_to_cos: bool, downscale_freq_shift: float, scale: int = 1, time_theta=10000
+    ):
+        super().__init__()
+        self.num_channels = num_channels
+        self.flip_sin_to_cos = flip_sin_to_cos
+        self.downscale_freq_shift = downscale_freq_shift
+        self.scale = scale
+        self.time_theta = time_theta
 
-class FluxTransformer2DModel(
+    def forward(self, timesteps):
+        t_emb = get_timestep_embedding(
+            timesteps,
+            self.num_channels,
+            flip_sin_to_cos=self.flip_sin_to_cos,
+            downscale_freq_shift=self.downscale_freq_shift,
+            scale=self.scale,
+            max_period=self.time_theta,
+        )
+        return t_emb
+    
+class BriaTimestepProjEmbeddings(nn.Module):
+    def __init__(self, embedding_dim, time_theta):
+        super().__init__()
+
+        self.time_proj = BriaTimesteps(
+            num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=0, time_theta=time_theta
+        )
+        self.timestep_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
+
+    def forward(self, timestep, dtype):
+        timesteps_proj = self.time_proj(timestep)
+        timesteps_emb = self.timestep_embedder(timesteps_proj.to(dtype=dtype))  # (N, D)
+        return timesteps_emb
+
+
+class BriaTransformer2DModel(
     ModelMixin, ConfigMixin, PeftAdapterMixin, FromOriginalModelMixin, FluxTransformer2DLoadersMixin
 ):
     _supports_gradient_checkpointing = True
@@ -262,9 +300,9 @@ class FluxTransformer2DModel(
         text_time_guidance_cls = (
             CombinedTimestepGuidanceTextProjEmbeddings if guidance_embeds else CombinedTimestepTextProjEmbeddings
         )
-        self.time_text_embed = text_time_guidance_cls(
-            embedding_dim=self.inner_dim, pooled_projection_dim=pooled_projection_dim
-        )
+        
+        time_theta=10000
+        self.time_embed = BriaTimestepProjEmbeddings(embedding_dim=self.inner_dim, time_theta=time_theta)
 
         self.context_embedder = nn.Linear(joint_attention_dim, self.inner_dim)
         self.x_embedder = nn.Linear(in_channels, self.inner_dim)
@@ -405,7 +443,6 @@ class FluxTransformer2DModel(
         hidden_states: torch.Tensor,
         cond_hidden_states: torch.Tensor = None,
         encoder_hidden_states: torch.Tensor = None,
-        pooled_projections: torch.Tensor = None,
         timestep: torch.LongTensor = None,
         img_ids: torch.Tensor = None,
         txt_ids: torch.Tensor = None,
@@ -446,20 +483,10 @@ class FluxTransformer2DModel(
         else:
             guidance = None
 
-        temb = (
-            self.time_text_embed(timestep, pooled_projections)
-            if guidance is None
-            else self.time_text_embed(timestep, guidance, pooled_projections)
-        )
+        temb = (self.time_embed(timestep, dtype=hidden_states.dtype))
         
-        cond_temb = (
-            self.time_text_embed(torch.ones_like(timestep) * 0, pooled_projections)
-                if guidance is None
-                else self.time_text_embed(
-                    torch.ones_like(timestep) * 0, guidance, pooled_projections
-                )
-            )
-        
+        cond_temb = (self.time_embed(timestep, dtype=hidden_states.dtype))
+       
         encoder_hidden_states = self.context_embedder(encoder_hidden_states)
 
         if txt_ids.ndim == 3:

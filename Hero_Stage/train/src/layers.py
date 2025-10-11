@@ -48,7 +48,7 @@ class LoRALinearLayer(nn.Module):
         batch_size = hidden_states.shape[0]
         cond_size = self.cond_width // 8 * self.cond_height // 8 * 16 // 64
         block_size =  hidden_states.shape[1] - cond_size * self.n_loras
-        shape = (batch_size, hidden_states.shape[1], 3072)
+        shape = (batch_size, hidden_states.shape[1], hidden_states.shape[2])
         mask = torch.ones(shape, device=hidden_states.device, dtype=dtype) 
         mask[:, :block_size+self.number*cond_size, :] = 0
         mask[:, block_size+(self.number+1)*cond_size:, :] = 0
@@ -189,7 +189,7 @@ class MultiDoubleStreamBlockLoraProcessor(nn.Module):
         batch_size, _, _ = hidden_states.shape if encoder_hidden_states is None else encoder_hidden_states.shape
 
         # `context` projections.
-        inner_dim = 3072
+        inner_dim = hidden_states.shape[-1]
         head_dim = inner_dim // attn.heads
         encoder_hidden_states_query_proj = attn.add_q_proj(encoder_hidden_states) 
         encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)

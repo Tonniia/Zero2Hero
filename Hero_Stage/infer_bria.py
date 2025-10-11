@@ -1,7 +1,7 @@
 import torch
 import torch
 from PIL import Image
-from train.src.pipeline import FluxPipeline
+from train.src.pipeline_bria import BriaPipeline
 from train.src.transformer_flux import FluxTransformer2DModel
 from train.src.lora_helper import set_single_lora, set_multi_lora
 import os
@@ -10,23 +10,47 @@ import numpy as np
 from utils import create_video_from_images, plot_loss_curve, \
     cal_psnr, cal_lpips, cal_psnr_mask, cal_clip_similarity, cal_clip_similarity_mask, cal_ssim
 
+from train.src.transformer_bria import BriaTransformer2DModel
 def clear_cache(transformer):
     for name, attn_processor in transformer.attn_processors.items():
         attn_processor.bank_kv.clear()
 
 # Initialize model
 device = "cuda"
-base_path = "./_pretrained_model/FLUX.1-dev"  # Path to your base model
+base_path = "/data/vjuicefs_ai_camera_lgroup_ql/11187973/_ckpt/huggingface/briaai/BRIA-3.2"  # Path to your base model
 
-pipe = FluxPipeline.from_pretrained(base_path, torch_dtype=torch.bfloat16, device=device)
-transformer = FluxTransformer2DModel.from_pretrained(
-    base_path, 
+transformer = BriaTransformer2DModel.from_pretrained(
+    "/data/vjuicefs_ai_camera_lgroup_ql/11187973/_ckpt/huggingface/briaai/BRIA-3.2",
     subfolder="transformer",
-    torch_dtype=torch.bfloat16, 
-    device=device
+    torch_dtype=torch.bfloat16
 )
-pipe.transformer = transformer
-pipe.to(device)
+pipe = BriaPipeline.from_pretrained(
+    "/data/vjuicefs_ai_camera_lgroup_ql/11187973/_ckpt/huggingface/briaai/BRIA-3.2", 
+    transformer=transformer,
+    torch_dtype=torch.bfloat16)
+pipe.to(device="cuda")
+
+prompt = "A vibrant birthday cake displayed on a festive table, frosted in smooth sky-blue icing with colorful sprinkles along the edges. Piped in bold white frosting across the top are the words “BIG BOY NOW” in playful, slightly uneven lettering. The cake is decorated with mini stars, balloons made of fondant, and a single candle burning brightly in the center. Soft, warm lighting highlights the texture of the frosting, while a blurred background of party decorations—streamers, confetti, and balloons—adds a joyful, celebratory atmosphere."
+negative_prompt = "Logo,Watermark,Ugly,Morbid,Extra fingers,Poorly drawn hands,Mutation,Blurry,Extra limbs,Gross proportions,Missing arms,Mutated hands,Long neck,Duplicate,Mutilated,Mutilated hands,Poorly drawn face,Deformed,Bad anatomy,Cloned face,Malformed limbs,Missing legs,Too many fingers"
+negative_prompt = ""
+
+# images = pipe(prompt=prompt, height=1024, width=1024, guidance_scale=1).images[0]
+
+images = pipe(
+    prompt,
+    height=512,
+    width=512,
+    guidance_scale=3.5,
+    num_inference_steps=25,
+    max_sequence_length=512,
+    generator=torch.Generator("cpu").manual_seed(5),
+    spatial_images=[],
+    subject_images=[],
+    cond_size=512,
+).images[0]
+output_path = "/data/vjuicefs_ai_camera_lgroup_ql/11187973/editing/diffusers_scripts/_output/bria/cake_cfg=1.png"
+images.save(output_path)
+print(output_path)
 
 eval_json_path_ls = [
     "./_input/_json/hero_stage/car_turn/rainbow_2cond_infer.json",
