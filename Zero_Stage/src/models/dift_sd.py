@@ -22,7 +22,7 @@ def get_and_save(trigger_get_qkv, name):
     def hook(model, input, kwargs, output):
         # input[0].shape: n=8, hw=576, c=1280
         # query.shape = [n*heads, hw=576, c/heads] -> [1, n*heads*c, hw]
-        _, query, key, value, _ = attention_op(model, input[0], stage="get", encoder_hidden_states=kwargs['encoder_hidden_states'])
+        _, query, key, value, _ = attention_op(model, input[0], encoder_hidden_states=kwargs['encoder_hidden_states'])
 
         query = query.reshape(1, -1, query.shape[1])
         key = key.reshape(1, -1, key.shape[1])

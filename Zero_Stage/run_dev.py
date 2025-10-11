@@ -56,7 +56,7 @@ def iter_combine(gamma, tau, k):
     return params_list
 
 # class for obtain and override the features
-class style_transfer_module():
+class style_transfer_module():        
     def __init__(self,
         unet, vae, text_encoder, tokenizer, scheduler, style_transfer_params = None,
     ):  
@@ -85,7 +85,7 @@ class style_transfer_module():
         
         # where to inject key and value
         qkv_injection_layer_num = self.style_transfer_params['injection_layers']
-        
+    
         for i in qkv_injection_layer_num:
             self.attn_features["layer{}_attn".format(i)] = {}
             attn[i].transformer_blocks[0].attn1.register_forward_hook(self.__get_query_key_value("layer{}_attn".format(i)))
@@ -217,26 +217,50 @@ class style_transfer_module():
     def __modify_self_attn_qkv(self, name):
         def hook(model, input, output):
             if self.trigger_modify_qkv:
-                _, q_cs, k_cs, v_cs, _ = attention_op(model, input[0])
-                attention_mask_ls = unet_wrapper.attention_mask
+                def _flip(x):
+                    # x: [dim0, dim1, dim2]
+                    dim0, dim1, dim2 = x.shape[0], x.shape[1], x.shape[2]
+                    s = int(math.sqrt((self.h * self.w / dim1)))
+                    x = x.view(dim0, self.h//s, self.w//s, dim2).permute(0, 3, 1, 2)
+                    x = torch.flip(x, dims=[3]) # [n, c, h,]
+                    x = x.reshape(dim0, dim1, dim2)
+                    return x
                 
-                q_c, k_c, v_c, q_s, k_s, v_s = self.attn_features_modify[name][int(self.cur_t)]
-                
-                # style injection
-                q_hat_cs = q_c * self.style_transfer_params['gamma'] + q_cs * (1 - self.style_transfer_params['gamma'])
+                mode = "flip_dim_3"
+                if mode == "mask":
+                    _, q_cs, k_cs, v_cs, _ = attention_op(model, input[0])
+                    attention_mask_ls = unet_wrapper.attention_mask
+                    
+                    q_c, k_c, v_c, q_s, k_s, v_s = self.attn_features_modify[name][int(self.cur_t)]
+                    
+                    # style injection
+                    q_hat_cs = q_c * self.style_transfer_params['gamma'] + q_cs * (1 - self.style_transfer_params['gamma'])
 
-                _, _, _, _, modified_output = attention_op(
-                    model, input[0], key=k_s, value=v_s, query=q_hat_cs, temperature=self.style_transfer_params['tau'],
-                    attention_mask_ls=attention_mask_ls,
-                    )
+                    _, _, _, _, modified_output = attention_op(
+                        model, input[0], key=k_s, value=v_s, query=q_hat_cs, temperature=self.style_transfer_params['tau'],
+                        attention_mask_ls=attention_mask_ls,
+                        )
+
+                elif mode == "flip_dim_3":
+                    # _, q_cs, k_cs, v_cs, _ = attention_op(model, input[0]) # [:, hw, :]
+                    # s = int(math.sqrt((self.h * self.w / v_cs.shape[1])))
+                    # dim0, seq_len, dim2 = q_cs.shape[0], q_cs.shape[1], q_cs.shape[2]
+                    # q_cs = q_cs.reshape(dim0, self.h//s, self.w//s, dim2) # [:, h, w, ]
+                    # q_cs = torch.flip(q_cs, dims=[2])
+                    # q_cs = v_cs.reshape(dim0, seq_len, dim2)
+                    # _, _, _, _, modified_output = attention_op(
+                    #     model, input[0], key=k_cs, value=v_cs, query=q_cs, temperature=self.style_transfer_params['tau'],
+                    #     )
+                    _, q_cs, k_cs, v_cs, output = attention_op(model, input[0])
+                    modified_output = _flip(output)
                 return modified_output
         return hook
 
 if __name__ == "__main__":
     cfg = get_args()
     sd_version = '2.1'
-    # json_file = "./_input/_json/zero.json"
-    json_file = "./_input/_json/colorization.json"
+    json_file = "./_input/_json/zero.json"
+    # json_file = "./_input/_json/colorization.json"
 
 
     with open(json_file, 'r', encoding='utf-8') as file:
@@ -275,7 +299,7 @@ if __name__ == "__main__":
             else:
                 non_none_params = {k: v for k, v in params.items() if v is not None}
                 params_list = iter_combine(**non_none_params)
-                
+  
             for style_transfer_params in params_list:
                 # Init style transfer module
                 vae, tokenizer, text_encoder, unet, scheduler = load_stable_diffusion(sd_version=sd_version, precision_t=dtype)
@@ -310,7 +334,7 @@ if __name__ == "__main__":
                     cos_map_matrix = rearrange(cos_map_matrix, 'n h w a b -> n (h w) (a b)')
                     cos_map_matrix_d2 = rearrange(cos_map_matrix_d2, 'n h w a b -> n (h w) (a b)')
                     cos_map_matrix_u2 = rearrange(cos_map_matrix_u2, 'n h w a b -> n (h w) (a b)')
-                    
+                        
                     unet_wrapper.attention_mask = [cos_map_matrix, cos_map_matrix_d2, cos_map_matrix_u2]
 
                     # Set modify features
@@ -330,10 +354,14 @@ if __name__ == "__main__":
                     # Generate style transferred image
                     denoise_kwargs = unet_wrapper.get_text_condition(content_text)
                 
-                    latent_cs = (content_latent - content_latent.mean(dim=(2, 3), keepdim=True)) / (content_latent.std(dim=(2, 3), keepdim=True) + 1e-4) * style_latent.std(dim=(2, 3), keepdim=True) + style_latent.mean(dim=(2, 3), keepdim=True)
-
+                    # latent_cs = (content_latent - content_latent.mean(dim=(2, 3), keepdim=True)) / (content_latent.std(dim=(2, 3), keepdim=True) + 1e-4) * style_latent.std(dim=(2, 3), keepdim=True) + style_latent.mean(dim=(2, 3), keepdim=True)
+                    latent_cs = content_latent
+                    
+                    # latent_cs = torch.flip(latent_cs, dims=[3])
+                    unet_wrapper.h, unet_wrapper.w = latent_cs.shape[-2], latent_cs.shape[-1]
                     # reverse process
                     print("Style transfer...")
+                    unet_wrapper.trigger_modify_qkv = True
                     images, latents = unet_wrapper.reverse_process(latent_cs, denoise_kwargs=denoise_kwargs) # reverse process save activations such as attn, res
                     
                     # save image
@@ -342,7 +370,7 @@ if __name__ == "__main__":
                     images = np.concatenate(images, axis=1)
 
                     folder_name = f"{style_transfer_params['gamma']}_{style_transfer_params['tau']}_k={style_transfer_params['top_k']}"
-                    save_dir = f"./_result/zero_stage/{folder_name}"
+                    save_dir = f"./_result/zero_dev/{folder_name}"
                     os.makedirs(save_dir, exist_ok=True)
 
                     save_folder = os.path.join(save_dir, f"{item['exp_name']}_{item['appearance']}") 

@@ -58,7 +58,7 @@ def iter_combine(gamma, tau, k):
 # class for obtain and override the features
 class style_transfer_module():
     def __init__(self,
-        unet, vae, text_encoder, tokenizer, scheduler, style_transfer_params = None,
+        zero_mode, unet, vae, text_encoder, tokenizer, scheduler, style_transfer_params = None,
     ):  
         style_transfer_params_default = {
             'gamma': None,
@@ -78,7 +78,7 @@ class style_transfer_module():
         self.attn_features = {} # where to save key value (attention block feature)
         self.attn_features_modify = {} # where to save key value to modify (attention block feature)
         self.cur_t = None
-        
+        self.zero_mode = zero_mode
         # Get residual and attention block in decoder
         # [0 ~ 11], total 12 layers
         resnet, attn = get_unet_layers(unet)
@@ -89,12 +89,15 @@ class style_transfer_module():
         for i in qkv_injection_layer_num:
             self.attn_features["layer{}_attn".format(i)] = {}
             attn[i].transformer_blocks[0].attn1.register_forward_hook(self.__get_query_key_value("layer{}_attn".format(i)))
+            # attn[i].transformer_blocks[0].attn2.register_forward_hook(self.__get_query_key_value("layer{}_attn".format(i)))
         
         # Modify hook (if you change query key value)
         for i in qkv_injection_layer_num:
             attn[i].transformer_blocks[0].attn1.register_forward_hook(self.__modify_self_attn_qkv("layer{}_attn".format(i)))
+            # attn[i].transformer_blocks[0].attn2.register_forward_hook(self.__modify_self_attn_qkv("layer{}_attn".format(i)))
         
         # triggers for obtaining or modifying features
+        
         self.trigger_get_qkv = False # if set True --> save attn qkv in self.attn_features
         self.trigger_modify_qkv = False # if set True --> save attn qkv by self.attn_features_modify
         
@@ -116,7 +119,7 @@ class style_transfer_module():
         }
         return denoise_kwargs
     
-    def reverse_process(self, input, denoise_kwargs):
+    def reverse_process(self, input, denoise_kwargs, indices):
         pred_images = []
         pred_latents = []
         
@@ -145,7 +148,21 @@ class style_transfer_module():
                 if 'encoder_hidden_states' in denoise_kwargs.keys():
                     bs = denoise_kwargs['encoder_hidden_states'].shape[0]
                     input = torch.cat([input] * bs)
-                
+                if True:
+                    pred_original_sample = pred_original_sample
+                else:
+                    # warp
+                    # indices
+                    x_flat = pred_original_sample.view(1, 4, -1)  # 展平为 [1, 4, 9216]
+
+                    # 使用 indices 索引重新排列每个通道
+                    rearranged_flat = torch.zeros_like(x_flat).to(pred_original_sample.device) # 创建一个空张量用于存储结果
+                    for c in range(4):  # 遍历每个通道
+                        rearranged_flat[0, c] = x_flat[0, c, indices]
+
+                    # 恢复原始形状
+                    pred_original_sample = rearranged_flat.view(1, 4, 96, 96)
+
                 pred_latents.append(pred_original_sample)
                 pred_images.append(decode_latent(pred_original_sample, **decode_kwargs))
                 
@@ -208,8 +225,8 @@ class style_transfer_module():
     def __get_query_key_value(self, name):
         def hook(model, input, output):
             if self.trigger_get_qkv:
-                _, query, key, value, _ = attention_op(model, input[0])
-                self.attn_features[name][int(self.cur_t)] = (query.detach(), key.detach(), value.detach())
+                _, query, key, value, hidden_feature = attention_op(model, input[0])
+                self.attn_features[name][int(self.cur_t)] = (query.detach(), key.detach(), value.detach(), hidden_feature.detach())
             
         return hook
 
@@ -217,27 +234,78 @@ class style_transfer_module():
     def __modify_self_attn_qkv(self, name):
         def hook(model, input, output):
             if self.trigger_modify_qkv:
+                module_name = name # TODO
                 _, q_cs, k_cs, v_cs, _ = attention_op(model, input[0])
+                # shape = [[1, hw, hw], [1, hw/4, hw/4], [1, hw*4, hw*4]]
                 attention_mask_ls = unet_wrapper.attention_mask
-                
-                q_c, k_c, v_c, q_s, k_s, v_s = self.attn_features_modify[name][int(self.cur_t)]
+                # shape = [2, hw, dim=1280?]
+                q_c, k_c, v_c, f_c, q_s, k_s, v_s, f_s = self.attn_features_modify[name][int(self.cur_t)] 
                 
                 # style injection
                 q_hat_cs = q_c * self.style_transfer_params['gamma'] + q_cs * (1 - self.style_transfer_params['gamma'])
+                # if int((self.cur_t-1)/50) % 5 == 0:
 
-                _, _, _, _, modified_output = attention_op(
-                    model, input[0], key=k_s, value=v_s, query=q_hat_cs, temperature=self.style_transfer_params['tau'],
-                    attention_mask_ls=attention_mask_ls,
-                    )
+                if q_c.shape[1] == attention_mask_ls[0].shape[1]:
+                    indices = torch.argmax(attention_mask_ls[0], dim=2).squeeze(0) 
+                if q_c.shape[1] == attention_mask_ls[1].shape[1]:
+                    indices = torch.argmax(attention_mask_ls[1], dim=2).squeeze(0) 
+                if q_c.shape[1] == attention_mask_ls[2].shape[1]:
+                    indices = torch.argmax(attention_mask_ls[2], dim=2).squeeze(0) 
+                   
+
+                if self.zero_mode == 'recon_tgt':
+                    _, _, _, _, modified_output = attention_op(
+                        model, input[0], key=k_c, value=v_c, query=q_hat_cs, temperature=self.style_transfer_params['tau'],
+                        attention_mask_ls=attention_mask_ls, beta=self.style_transfer_params['beta'],
+                        )
+                elif self.zero_mode == 'recon_ref':
+                    _, _, _, _, modified_output = attention_op(
+                        model, input[0], key=k_s, value=v_s, query=q_s, 
+                        # temperature=self.style_transfer_params['tau'], attention_mask_ls=attention_mask_ls, beta=self.style_transfer_params['beta'],
+                        )
+                else:        
+                    if self.zero_mode == 'warpO':
+                        # warp output feature
+                        batch_size, hw, feature_dim = f_s.shape
+                        modified_output = torch.zeros_like(f_s)
+                        for b in range(batch_size):
+                            modified_output[b] = f_s[b][indices]
+                    elif self.zero_mode == 'mask':
+                        # original
+                        attention_probs, _, _, _, modified_output = attention_op(
+                            model, input[0], key=k_s, value=v_s, query=q_hat_cs, temperature=self.style_transfer_params['tau'],
+                            attention_mask_ls=attention_mask_ls, beta=self.style_transfer_params['beta'],
+                            )
+                        # print(attention_probs[0].var())
+                    elif self.zero_mode == 'warpQ':
+                        batch_size, hw, feature_dim = q_s.shape
+                        # k_hat_cs = torch.zeros_like(k_s)
+                        q_hat_cs = torch.zeros_like(q_s)
+                        for b in range(batch_size):
+                            # k_hat_cs[b] = k_s[b][indices]
+                            q_hat_cs[b] = q_s[b][indices]
+                        attention_probs, _, _, _, modified_output = attention_op(
+                            model, input[0], key=k_s, value=v_s, query=q_hat_cs, temperature=self.style_transfer_params['tau'],
+                            attention_mask_ls=attention_mask_ls, beta=self.style_transfer_params['beta'],
+                            )  
+                        # print(modified_output[0].var())
+                    elif self.zero_mode == "wflip":
+                        batch_size, hw, feature_dim = f_s.shape
+                        modified_output = torch.zeros_like(f_s)
+                        for b in range(batch_size):
+                            modified_output[b] = f_s[b]
+
                 return modified_output
+            
         return hook
 
 if __name__ == "__main__":
     cfg = get_args()
     sd_version = '2.1'
-    # json_file = "./_input/_json/zero.json"
-    json_file = "./_input/_json/colorization.json"
 
+    json_file = "./_input/_json/zero.json"
+    # mask, warpO, wflip
+    zero_mode = "wflip"
 
     with open(json_file, 'r', encoding='utf-8') as file:
         data = json.load(file)
@@ -282,7 +350,7 @@ if __name__ == "__main__":
                 scheduler.set_timesteps(ddim_steps)
                 sample_size = unet.config.sample_size
 
-                unet_wrapper = style_transfer_module(unet, vae, text_encoder, tokenizer, scheduler, style_transfer_params=style_transfer_params)
+                unet_wrapper = style_transfer_module(zero_mode, unet, vae, text_encoder, tokenizer, scheduler, style_transfer_params=style_transfer_params)
                 print("style_path: ", style_path)
                 style_latent, style_features, _ = image_inversion(style_path, style_text, unet_wrapper)
 
@@ -309,9 +377,10 @@ if __name__ == "__main__":
 
                     cos_map_matrix = rearrange(cos_map_matrix, 'n h w a b -> n (h w) (a b)')
                     cos_map_matrix_d2 = rearrange(cos_map_matrix_d2, 'n h w a b -> n (h w) (a b)')
-                    cos_map_matrix_u2 = rearrange(cos_map_matrix_u2, 'n h w a b -> n (h w) (a b)')
+                    cos_map_matrix_u2 = rearrange(cos_map_matrix_u2, 'n h w a b -> n (h w) (a b)')   
                     
                     unet_wrapper.attention_mask = [cos_map_matrix, cos_map_matrix_d2, cos_map_matrix_u2]
+                    indices = torch.argmax(cos_map_matrix_u2, dim=2).squeeze(0) 
 
                     # Set modify features
                     for layer_name in style_features.keys():
@@ -319,22 +388,26 @@ if __name__ == "__main__":
                         for t in scheduler.timesteps:
                             t = t.item()
                             unet_wrapper.attn_features_modify[layer_name][t] = (
-                                content_features[layer_name][t][0], content_features[layer_name][t][1], content_features[layer_name][t][2],
-                                style_features[layer_name][t][0], style_features[layer_name][t][1], style_features[layer_name][t][2]
+                                content_features[layer_name][t][0], content_features[layer_name][t][1], content_features[layer_name][t][2], content_features[layer_name][t][3],
+                                style_features[layer_name][t][0], style_features[layer_name][t][1], style_features[layer_name][t][2], style_features[layer_name][t][3]
                             ) # content as q / style as kv        
                     # =============================================
                     
                     unet_wrapper.trigger_get_qkv = False
                     unet_wrapper.trigger_modify_qkv = not cfg.without_attn_injection # modify attn feature (key value)
                     
+                    
                     # Generate style transferred image
                     denoise_kwargs = unet_wrapper.get_text_condition(content_text)
-                
-                    latent_cs = (content_latent - content_latent.mean(dim=(2, 3), keepdim=True)) / (content_latent.std(dim=(2, 3), keepdim=True) + 1e-4) * style_latent.std(dim=(2, 3), keepdim=True) + style_latent.mean(dim=(2, 3), keepdim=True)
-
+                    
+                    if False: # cfg.without_init_adain
+                        latent_cs = content_latent
+                    else:
+                        latent_cs = (content_latent - content_latent.mean(dim=(2, 3), keepdim=True)) / (content_latent.std(dim=(2, 3), keepdim=True) + 1e-4) * style_latent.std(dim=(2, 3), keepdim=True) + style_latent.mean(dim=(2, 3), keepdim=True)
+                    latent_cs = content_latent
                     # reverse process
                     print("Style transfer...")
-                    images, latents = unet_wrapper.reverse_process(latent_cs, denoise_kwargs=denoise_kwargs) # reverse process save activations such as attn, res
+                    images, latents = unet_wrapper.reverse_process(latent_cs, denoise_kwargs=denoise_kwargs, indices=indices) # reverse process save activations such as attn, res
                     
                     # save image
                     images = [denormalize(input)[0] for input in images]
@@ -342,7 +415,7 @@ if __name__ == "__main__":
                     images = np.concatenate(images, axis=1)
 
                     folder_name = f"{style_transfer_params['gamma']}_{style_transfer_params['tau']}_k={style_transfer_params['top_k']}"
-                    save_dir = f"./_result/zero_stage/{folder_name}"
+                    save_dir = f"./_result/zero_stage_{zero_mode}/{folder_name}"
                     os.makedirs(save_dir, exist_ok=True)
 
                     save_folder = os.path.join(save_dir, f"{item['exp_name']}_{item['appearance']}") 
