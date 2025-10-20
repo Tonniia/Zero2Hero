@@ -26,50 +26,19 @@ def image_inversion(image_path, text, unet_wrapper):
     latent = encode_latent(normalize(image).to(device=vae.device, dtype=dtype), vae)
     
     print(f"Invert: {image_path}...")
-    images, latents = unet_wrapper.invert_process(latent, denoise_kwargs=denoise_kwargs) # reverse process save activations such as attn, res
+    images, latents = unet_wrapper.invert_process(latent, denoise_kwargs=denoise_kwargs)
     latent = latents[-1]
-    
-    # ================= IMPORTANT =================
-    # save key value from style image
     features = copy.deepcopy(unet_wrapper.attn_features)
-    # =============================================
+
     return latent, features, image
-
-def iter_combine(gamma, tau, k):
-    gamma_ls = gamma
-    tau_ls = tau
-    top_k_ls = k
-
-    fixed_params = {
-        "injection_layers": list(range(3, 12)),
-    }
-    combinations = list(itertools.product(gamma_ls, tau_ls, top_k_ls))
-    params_list = []
-    for gamma, tau, top_k in combinations:
-        params = fixed_params.copy()
-        params.update({
-            "gamma": gamma,
-            "tau": tau,
-            "top_k": top_k,
-        })
-        params_list.append(params) 
-    return params_list
 
 # class for obtain and override the features
 class style_transfer_module():
     def __init__(self,
-        unet, vae, text_encoder, tokenizer, scheduler, style_transfer_params = None,
+        zero_mode, unet, vae, text_encoder, tokenizer, scheduler, style_transfer_params,
     ):  
-        style_transfer_params_default = {
-            'gamma': None,
-            'tau': None,
-            'injection_layers': None
-        }
-        if style_transfer_params is not None:
-            style_transfer_params_default.update(style_transfer_params)
-        self.style_transfer_params = style_transfer_params_default
-        
-        self.unet = unet # SD unet
+        self.style_transfer_params = style_transfer_params
+        self.unet = unet
         self.vae = vae
         self.text_encoder = text_encoder
         self.tokenizer = tokenizer
@@ -78,7 +47,7 @@ class style_transfer_module():
         self.attn_features = {} # where to save key value (attention block feature)
         self.attn_features_modify = {} # where to save key value to modify (attention block feature)
         self.cur_t = None
-        
+        self.zero_mode = zero_mode
         # Get residual and attention block in decoder
         # [0 ~ 11], total 12 layers
         resnet, attn = get_unet_layers(unet)
@@ -136,8 +105,8 @@ class style_transfer_module():
                     noisy_residual = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
                     input, _ = input.chunk(2)
                 
-                prev_noisy_sample = scheduler.step(noisy_residual, t, input).prev_sample                # coef * P_t(e_t(x_t)) + D_t(e_t(x_t))
-                pred_original_sample = scheduler.step(noisy_residual, t, input).pred_original_sample    # D_t(e_t(x_t))
+                prev_noisy_sample = scheduler.step(noisy_residual, t, input).prev_sample
+                pred_original_sample = scheduler.step(noisy_residual, t, input).pred_original_sample
                 
                 input = prev_noisy_sample
 
@@ -151,7 +120,6 @@ class style_transfer_module():
                 
         return pred_images, pred_latents
         
-            
     ## Inversion (https://github.com/huggingface/diffusion-models-class/blob/main/unit4/01_ddim_inversion.ipynb)
     def invert_process(self, input, denoise_kwargs):
         pred_images = []
@@ -169,17 +137,10 @@ class style_transfer_module():
             input = torch.cat([input] * bs)
         with torch.no_grad():
             for i in tqdm(range(0, num_inference_steps)):
-
                 t = timesteps[i]
-                
                 self.cur_t = t.item()
-                
-                # Predict the noise residual
                 noisy_residual = self.unet(input, t.to(input.device), **denoise_kwargs).sample
-
                 noise_pred = noisy_residual
-
-                # For text condition on stable diffusion
                 if noisy_residual.shape[0] == 2:
                     # perform guidance
                     noise_pred_text, noise_pred_uncond = noisy_residual.chunk(2)
@@ -192,7 +153,6 @@ class style_transfer_module():
                 alpha_t_next = self.scheduler.alphas_cumprod[next_t]
 
                 latents = input
-                # Inverted update step (re-arranging the update step to get x(t) (new latents) as a function of x(t-1) (current latents)
                 latents = (latents - (1-alpha_t).sqrt()*noise_pred)*(alpha_t_next.sqrt()/alpha_t.sqrt()) + (1-alpha_t_next).sqrt()*noise_pred
                 
                 input = latents
@@ -203,41 +163,54 @@ class style_transfer_module():
         return pred_images, pred_latents
         
     # ============================ hook operations ===============================
-    
-    # save key value in self.original_kv[name]
     def __get_query_key_value(self, name):
         def hook(model, input, output):
             if self.trigger_get_qkv:
-                _, query, key, value, _ = attention_op(model, input[0])
-                self.attn_features[name][int(self.cur_t)] = (query.detach(), key.detach(), value.detach())
+                _, query, key, value, hidden_feature = attention_op(model, input[0])
+                self.attn_features[name][int(self.cur_t)] = (query.detach(), key.detach(), value.detach(), hidden_feature.detach())
             
         return hook
 
-    
     def __modify_self_attn_qkv(self, name):
         def hook(model, input, output):
             if self.trigger_modify_qkv:
                 _, q_cs, k_cs, v_cs, _ = attention_op(model, input[0])
                 attention_mask_ls = unet_wrapper.attention_mask
                 
-                q_c, k_c, v_c, q_s, k_s, v_s = self.attn_features_modify[name][int(self.cur_t)]
+                q_c, k_c, v_c, f_c, q_s, k_s, v_s, f_s = self.attn_features_modify[name][int(self.cur_t)] 
                 
-                # style injection
+                # Fuse q_c (denoising branck) and q_cs (content DDIM inversion). Default gamma=1.0
                 q_hat_cs = q_c * self.style_transfer_params['gamma'] + q_cs * (1 - self.style_transfer_params['gamma'])
 
-                _, _, _, _, modified_output = attention_op(
-                    model, input[0], key=k_s, value=v_s, query=q_hat_cs, temperature=self.style_transfer_params['tau'],
-                    attention_mask_ls=attention_mask_ls,
-                    )
+                if self.zero_mode == 'attn_mask':
+                    _, _, _, _, modified_output = attention_op(
+                        model, input[0], key=k_s, value=v_s, query=q_hat_cs, temperature=self.style_transfer_params['tau'],
+                        attention_mask_ls=attention_mask_ls,
+                        )
+                elif self.zero_mode == 'warpO':
+                    # warp output feature
+                    batch_size, hw, feature_dim = f_s.shape
+                    modified_output = torch.zeros_like(f_s)
+                    for b in range(batch_size):
+                        modified_output[b] = f_s[b][indices]
+                elif self.zero_mode == 'warpQ':
+                    # warp Q
+                    batch_size, hw, feature_dim = q_s.shape
+                    q_hat_cs = torch.zeros_like(q_s)
+                    for b in range(batch_size):
+                        q_hat_cs[b] = q_s[b][indices]
+                    attention_probs, _, _, _, modified_output = attention_op(
+                        model, input[0], key=k_s, value=v_s, query=q_hat_cs, temperature=self.style_transfer_params['tau'],
+                        attention_mask_ls=attention_mask_ls,
+                        )  
                 return modified_output
         return hook
+    # ============================ hook operations ===============================
 
 if __name__ == "__main__":
-    cfg = get_args()
+    # cfg = get_args()
     sd_version = '2.1'
-    # json_file = "./_input/_json/zero.json"
-    json_file = "./_input/_json/colorization.json"
-
+    json_file = "./_input/_json/zero.json"
 
     with open(json_file, 'r', encoding='utf-8') as file:
         data = json.load(file)
@@ -250,110 +223,99 @@ if __name__ == "__main__":
             exp_name = item["exp_name"]
             appearance = item["appearance"]
             anchor_frame = item["anchor_frame"]
+            zero_mode = item["zero_mode"]
             
             content_folder = f"./_input/_data/{exp_name}/content"
             style_path = f"./_input/_data/{exp_name}/style/frame_{anchor_frame:04d}_{appearance}.png"
             anchor_path = f"{content_folder}/frame_{anchor_frame:04d}.png"
             
-            # options
             ddim_steps = 20
             device = "cuda"
             dtype = torch.float16
-            in_c = 4
-            guidance_scale = 0.0 # no text
+            guidance_scale = 0.0 # Text = None
             
             style_text = ""
             content_text = ""
+            
+            # Fixed. Our method DO NOT require hyperparameter tuning!
+            style_transfer_params = {
+                "injection_layers": list(range(3, 12)),     # feature manipulation layers. Note that only 3-12 layers have attention module
+                'gamma': 1.0,                               # Fuse q_c (denoising branck) and q_cs (content DDIM inversion). Default gamma=1.0
+                'tau': 1.0,                                 # attention Softmax temperature. when tau>1, the distribution becomes more concentrated.
+                'top_k': 1                                  # Select top-k of DIFT correspondance as attention 
+                }
 
-            def get_key(item, key):
-                return item.get(key)
-            # Load hyperparameters about Cross-image Attention
-            keys = ["k", "gamma", "tau"]
-            params = {key: get_key(item, key) for key in keys}
-            if all(params.values()):
-                params_list = iter_combine(**params)
-            else:
-                non_none_params = {k: v for k, v in params.items() if v is not None}
-                params_list = iter_combine(**non_none_params)
+            # Init style transfer module
+            vae, tokenizer, text_encoder, unet, scheduler = load_stable_diffusion(sd_version=sd_version, precision_t=dtype)
+            scheduler.set_timesteps(ddim_steps)
+            sample_size = unet.config.sample_size
+
+            unet_wrapper = style_transfer_module(zero_mode, unet, vae, text_encoder, tokenizer, scheduler, style_transfer_params=style_transfer_params)
+            
+            # Cache DDIM inversion features (Q, K, V, O)
+            style_latent, style_features, _ = image_inversion(style_path, style_text, unet_wrapper)
+
+            for i in range(frame_id[0], frame_id[1], frame_id[2]):
+                if i == frame_id[0]:
+                    dift = SDFeaturizer("./_pretrained_model/stable-diffusion-2-1-base", null_prompt='')
+                content_path = f"{content_folder}/frame_{i:04d}.png"
+                try:
+                    content_image = cv2.imread(content_path)[:, :, ::-1]
+                    content_image = cv2.resize(content_image, (img_size[1], img_size[0]))
+                    content_latent, content_features, _ = image_inversion(content_path, content_text, unet_wrapper)
+                except:
+                    print(f"cannot found frame {content_folder}/frame_{i:04d}: processing images finished")
+                    break
                 
-            for style_transfer_params in params_list:
-                # Init style transfer module
-                vae, tokenizer, text_encoder, unet, scheduler = load_stable_diffusion(sd_version=sd_version, precision_t=dtype)
-                scheduler.set_timesteps(ddim_steps)
-                sample_size = unet.config.sample_size
-
-                unet_wrapper = style_transfer_module(unet, vae, text_encoder, tokenizer, scheduler, style_transfer_params=style_transfer_params)
-                print("style_path: ", style_path)
-                style_latent, style_features, _ = image_inversion(style_path, style_text, unet_wrapper)
-
-                for i in range(frame_id[0], frame_id[1], frame_id[2]):
-                    if i == frame_id[0]:
-                        dift = SDFeaturizer("./_pretrained_model/stable-diffusion-2-1-base", null_prompt='')
-                    content_path = f"{content_folder}/frame_{i:04d}.png"
-                    try:
-                        content_image = cv2.imread(content_path)[:, :, ::-1]
-                        content_image = cv2.resize(content_image, (img_size[1], img_size[0]))
-                        content_latent, content_features, _ = image_inversion(content_path, content_text, unet_wrapper)
-                    except:
-                        print(f"cannot found frame {content_folder}/frame_{i:04d}: processing images finished~")
-                        break
-                    
-                    cos_map_matrix, cos_map_matrix_d2, cos_map_matrix_u2 = extract_mask_topk(
-                        dift=dift,
-                        src_image_path = content_path,
-                        trg_image_path = anchor_path,
-                        img_size = img_size, # [512, 1024]
-                        up_ft_index = 1,
-                        top_k = style_transfer_params["top_k"],
-                        )
-
-                    cos_map_matrix = rearrange(cos_map_matrix, 'n h w a b -> n (h w) (a b)')
-                    cos_map_matrix_d2 = rearrange(cos_map_matrix_d2, 'n h w a b -> n (h w) (a b)')
-                    cos_map_matrix_u2 = rearrange(cos_map_matrix_u2, 'n h w a b -> n (h w) (a b)')
-                    
-                    unet_wrapper.attention_mask = [cos_map_matrix, cos_map_matrix_d2, cos_map_matrix_u2]
-
-                    # Set modify features
-                    for layer_name in style_features.keys():
-                        unet_wrapper.attn_features_modify[layer_name] = {}
-                        for t in scheduler.timesteps:
-                            t = t.item()
-                            unet_wrapper.attn_features_modify[layer_name][t] = (
-                                content_features[layer_name][t][0], content_features[layer_name][t][1], content_features[layer_name][t][2],
-                                style_features[layer_name][t][0], style_features[layer_name][t][1], style_features[layer_name][t][2]
-                            ) # content as q / style as kv        
-                    # =============================================
-                    
-                    unet_wrapper.trigger_get_qkv = False
-                    unet_wrapper.trigger_modify_qkv = not cfg.without_attn_injection # modify attn feature (key value)
-                    
-                    # Generate style transferred image
-                    denoise_kwargs = unet_wrapper.get_text_condition(content_text)
-                
-                    latent_cs = (content_latent - content_latent.mean(dim=(2, 3), keepdim=True)) / (content_latent.std(dim=(2, 3), keepdim=True) + 1e-4) * style_latent.std(dim=(2, 3), keepdim=True) + style_latent.mean(dim=(2, 3), keepdim=True)
-
-                    # reverse process
-                    print("Style transfer...")
-                    images, latents = unet_wrapper.reverse_process(latent_cs, denoise_kwargs=denoise_kwargs) # reverse process save activations such as attn, res
-                    
-                    # save image
-                    images = [denormalize(input)[0] for input in images]
-                    image_last = images[-1]
-                    images = np.concatenate(images, axis=1)
-
-                    folder_name = f"{style_transfer_params['gamma']}_{style_transfer_params['tau']}_k={style_transfer_params['top_k']}"
-                    save_dir = f"./_result/zero_stage/{folder_name}"
-                    os.makedirs(save_dir, exist_ok=True)
-
-                    save_folder = os.path.join(save_dir, f"{item['exp_name']}_{item['appearance']}") 
-                    os.makedirs(save_folder, exist_ok=True)
-                    
-                    file_name = f"frame_{i:04d}"
-                    save_image(image_last, f"{save_folder}/{file_name}.png")
-                    print(f"save to {save_folder}/{file_name}.png")
-
-                    create_video_from_images(
-                        save_folder,
-                        save_folder + "/video.mp4",
-                        fps=8
+                cos_map_matrix, cos_map_matrix_d2, cos_map_matrix_u2 = extract_mask_topk(
+                    dift=dift,
+                    src_image_path = content_path,
+                    trg_image_path = anchor_path,
+                    img_size = img_size, # [512, 1024]
+                    up_ft_index = 1,
+                    top_k = style_transfer_params["top_k"],
                     )
+
+                cos_map_matrix = rearrange(cos_map_matrix, 'n h w a b -> n (h w) (a b)')
+                cos_map_matrix_d2 = rearrange(cos_map_matrix_d2, 'n h w a b -> n (h w) (a b)')
+                cos_map_matrix_u2 = rearrange(cos_map_matrix_u2, 'n h w a b -> n (h w) (a b)')
+                
+                unet_wrapper.attention_mask = [cos_map_matrix, cos_map_matrix_d2, cos_map_matrix_u2]
+
+                # Load DDIM inversion features (Q, K, V, O)
+                for layer_name in style_features.keys():
+                    unet_wrapper.attn_features_modify[layer_name] = {}
+                    for t in scheduler.timesteps:
+                        t = t.item()
+                        unet_wrapper.attn_features_modify[layer_name][t] = (
+                            content_features[layer_name][t][0], content_features[layer_name][t][1], content_features[layer_name][t][2], content_features[layer_name][t][3],
+                            style_features[layer_name][t][0], style_features[layer_name][t][1], style_features[layer_name][t][2], style_features[layer_name][t][3]
+                        )     
+
+                # Start Appearance transfer
+                unet_wrapper.trigger_get_qkv = False
+                unet_wrapper.trigger_modify_qkv = True
+                denoise_kwargs = unet_wrapper.get_text_condition(content_text)
+                latent_cs = content_latent
+
+                print("Appearance transfer...")
+                images, latents = unet_wrapper.reverse_process(latent_cs, denoise_kwargs=denoise_kwargs) # reverse process save activations such as attn, res
+                images = [denormalize(input)[0] for input in images]
+                image_last = images[-1]
+                images = np.concatenate(images, axis=1)
+
+                save_dir = f"./_result/zero_stage_{zero_mode}"
+                os.makedirs(save_dir, exist_ok=True)
+
+                save_folder = os.path.join(save_dir, f"{item['exp_name']}_{item['appearance']}") 
+                os.makedirs(save_folder, exist_ok=True)
+                
+                file_name = f"frame_{i:04d}"
+                save_image(image_last, f"{save_folder}/{file_name}.png")
+                print(f"save to {save_folder}/{file_name}.png")
+
+                create_video_from_images(
+                    save_folder,
+                    save_folder + "/video.mp4",
+                    fps=8
+                )

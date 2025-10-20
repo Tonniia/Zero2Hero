@@ -242,53 +242,6 @@ def attention_op(
     
     return attention_probs, query, key, value, hidden_states
 
-def attention_op_mask(
-    attn, hidden_states, encoder_hidden_states=None, 
-    attention_mask=None, query=None, 
-    mask=None,
-    key_s=None, value_s=None, 
-    key_c=None, value_c=None, 
-    attention_probs=None, 
-    temperature=1.0, beta=1.0,
-    attention_input=None,
-    attention_mask_ls=None,
-    ):
-    import torch.nn.functional as F
-    _, _, _, _, hidden_states_s = attention_op(
-        attn, hidden_states, encoder_hidden_states, 
-        attention_mask, query, 
-        key_s, value_s, 
-        attention_probs, 
-        temperature, beta,
-        attention_input,
-        attention_mask_ls,
-    )
-    _, _, _, _, hidden_states_c = attention_op(
-        attn, hidden_states, encoder_hidden_states, 
-        attention_mask, query, 
-        key_c, value_c, 
-        attention_probs, 
-        temperature, beta,
-        attention_input,
-        attention_mask_ls=None,
-    )
-    hw = hidden_states.shape[1]
-    h_w_rate = mask.shape[0]/mask.shape[1]
-    h = int(math.sqrt(h_w_rate*hw))
-    w = int(h/h_w_rate)
-
-    mask = mask.unsqueeze(0).unsqueeze(0)  
-    mask = F.interpolate(mask, size=(h, w), mode='bilinear', align_corners=False)
-    mask = mask.squeeze(0).squeeze(0)  
-    mask = rearrange(mask, 'h w -> (h w)')
-
-    mask_expanded = mask.unsqueeze(0).unsqueeze(-1).expand_as(hidden_states_s).to(hidden_states_s.device)
-
-    output = hidden_states_s * mask_expanded + hidden_states_c * (1 - mask_expanded)
-    output = output.to(hidden_states_c.dtype)
-
-    return None, None, None, None, output
-
 def get_attention_scores(
         attn, query: torch.Tensor, key: torch.Tensor, attention_mask: torch.Tensor = None, beta=100.0,
     ) -> torch.Tensor:
