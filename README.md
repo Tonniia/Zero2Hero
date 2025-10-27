@@ -10,7 +10,10 @@ To evaluate consistency more accurately, we construct a group of videos with mul
 
 ![teasor](assets/teasor.jpg)
 
+[2025.10] We add comparisons with recent reference-based image/video editing works, [ACE++](https://github.com/ali-vilab/ACE_plus), [EasyControl](https://github.com/Xiaojiu-z/EasyControl) and [VACE](https://github.com/ali-vilab/VACE), on appearance transfer task. For ACE++ and EasyControl, the suitbale mode is reference/subject + inpaint. For VACE, we test it using both ref+inpaint and ref+depth mode. Our method excels at the **fine-grained appearance transfer** without structural changes. This focus makes it distinct from, and complementary to, general editing. This task is vital for CG workflows like anime rendering and stylization.
 
+
+![teasor](assets/VACE_ACE_baselines.png)
 
 # Method
 
