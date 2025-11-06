@@ -1,0 +1,383 @@
+import torch
+import numpy as np
+import copy
+import os
+import itertools
+import cv2
+from tqdm import tqdm
+from time import time
+from config import get_args
+import json
+from einops import rearrange
+
+from stable_diffusion import load_stable_diffusion, encode_latent, decode_latent, get_text_embedding, get_unet_layers, attention_op  # load SD
+from extract_dift_retrieval import *
+from utils import * 
+
+def combine_modified_outputs(modified_output_ca, modified_output_sa, flat_mask_ls):
+    # 将mask扩展到与modified_output相同的形状
+    flat_mask_ls = torch.tensor(flat_mask_ls).to(modified_output_ca.device)
+    mask_3d = flat_mask_ls.unsqueeze(0).unsqueeze(-1)  # [1, 576, 1]
+    mask_3d = mask_3d.expand(2, modified_output_ca.shape[1], modified_output_ca.shape[2])  # [2, 576, 1280]
+    
+    # 根据mask选择元素
+    modified_output = torch.where(mask_3d == 1, modified_output_ca, modified_output_sa)
+    
+    return modified_output
+    
+
+def mask_to_attention_matrix(mask):
+    s = mask.shape[0]*mask.shape[1]
+    if len(mask.shape) == 3:
+        gray_mask = cv2.cvtColor(mask, cv2.COLOR_RGB2GRAY)
+        _, binary_mask = cv2.threshold(gray_mask, 127, 1, cv2.THRESH_BINARY)
+    else:
+        binary_mask = mask
+    
+    # 展平mask: 48x48 -> 2304
+    flat_mask = binary_mask.flatten()  # shape: [2304]
+    flat_mask = flat_mask // 255
+    
+    white_indices = np.where(flat_mask == 1)[0]
+    num_white = len(white_indices)
+
+    attention_matrix = np.zeros((s, s), dtype=np.float32)
+    for i in range(num_white):
+        for j in range(num_white):
+            idx_i = white_indices[i]
+            idx_j = white_indices[j]
+            attention_matrix[idx_i, idx_j] = 1.0
+    
+    attention_matrix = attention_matrix[np.newaxis, :, :]  # [1, 2304, 2304]
+    ca_mask = torch.from_numpy(attention_matrix)
+
+    attention_matrix = np.ones((s, s), dtype=np.float32)
+    for i in range(num_white):
+        for j in range(s):
+            idx_i = white_indices[i]
+            attention_matrix[idx_i, j] = 0.0
+    
+    attention_matrix = attention_matrix[np.newaxis, :, :]  # [1, 2304, 2304]
+    sa_mask = torch.from_numpy(attention_matrix)
+
+    return ca_mask, sa_mask, flat_mask
+
+def image_inversion(image_path, text, unet_wrapper):
+    print("style path: ", image_path)
+    image = cv2.imread(image_path)[:, :, ::-1]
+    image = cv2.resize(image, (img_size[1], img_size[0]))
+    denoise_kwargs = unet_wrapper.get_text_condition(text)
+
+    unet_wrapper.trigger_get_qkv = True
+    unet_wrapper.trigger_modify_qkv = False
+    
+    latent = encode_latent(normalize(image).to(device=vae.device, dtype=dtype), vae)
+    
+    print(f"Invert: {image_path}...")
+    images, latents = unet_wrapper.invert_process(latent, denoise_kwargs=denoise_kwargs)
+    latent = latents[-1]
+    features = copy.deepcopy(unet_wrapper.attn_features)
+
+    return latent, features, image
+
+# class for obtain and override the features
+class style_transfer_module():
+    def __init__(self,
+        zero_mode, unet, vae, text_encoder, tokenizer, scheduler, style_transfer_params,
+    ):  
+        self.style_transfer_params = style_transfer_params
+        self.unet = unet
+        self.vae = vae
+        self.text_encoder = text_encoder
+        self.tokenizer = tokenizer
+        self.scheduler = scheduler
+
+        self.attn_features = {} # where to save key value (attention block feature)
+        self.attn_features_modify = {} # where to save key value to modify (attention block feature)
+        self.cur_t = None
+        self.zero_mode = zero_mode
+        # Get residual and attention block in decoder
+        # [0 ~ 11], total 12 layers
+        resnet, attn = get_unet_layers(unet)
+        
+        # where to inject key and value
+        qkv_injection_layer_num = self.style_transfer_params['injection_layers']
+        
+        for i in qkv_injection_layer_num:
+            self.attn_features["layer{}_attn".format(i)] = {}
+            attn[i].transformer_blocks[0].attn1.register_forward_hook(self.__get_query_key_value("layer{}_attn".format(i)))
+        
+        # Modify hook (if you change query key value)
+        for i in qkv_injection_layer_num:
+            attn[i].transformer_blocks[0].attn1.register_forward_hook(self.__modify_self_attn_qkv("layer{}_attn".format(i)))
+        
+        # triggers for obtaining or modifying features
+        self.trigger_get_qkv = False # if set True --> save attn qkv in self.attn_features
+        self.trigger_modify_qkv = False # if set True --> save attn qkv by self.attn_features_modify
+        
+        self.modify_num = None # ignore
+        self.modify_num_sa = None # ignore
+        
+    def get_text_condition(self, text):
+        if text is None:
+            uncond_input = tokenizer(
+                [""], padding="max_length", max_length=tokenizer.model_max_length, return_tensors="pt"
+            )
+            uncond_embeddings = text_encoder(uncond_input.input_ids.to(device))[0].to(device)
+            return {'encoder_hidden_states': uncond_embeddings}
+        
+        text_embeddings, uncond_embeddings = get_text_embedding(text, self.text_encoder, self.tokenizer)
+        text_cond = [text_embeddings, uncond_embeddings]
+        denoise_kwargs = {
+            'encoder_hidden_states': torch.cat(text_cond)
+        }
+        return denoise_kwargs
+    
+    def reverse_process(self, input, denoise_kwargs):
+        pred_images = []
+        pred_latents = []
+        
+        decode_kwargs = {'vae': vae}
+
+        # Reverse diffusion process
+        for t in tqdm(self.scheduler.timesteps):
+            # setting t (for saving time step)
+            self.cur_t = t.item()
+            
+            with torch.no_grad():
+                noisy_residual = unet_wrapper.unet(input, t.to(input.device), **denoise_kwargs).sample
+                # For text condition on stable diffusion
+                if noisy_residual.shape[0] == 2:
+                    # perform guidance
+                    noise_pred_text, noise_pred_uncond = noisy_residual.chunk(2)
+                    noisy_residual = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+                    input, _ = input.chunk(2)
+                
+                prev_noisy_sample = scheduler.step(noisy_residual, t, input).prev_sample
+                pred_original_sample = scheduler.step(noisy_residual, t, input).pred_original_sample
+                
+                input = prev_noisy_sample
+
+                # For text condition on stable diffusion
+                if 'encoder_hidden_states' in denoise_kwargs.keys():
+                    bs = denoise_kwargs['encoder_hidden_states'].shape[0]
+                    input = torch.cat([input] * bs)
+                
+                pred_latents.append(pred_original_sample)
+                pred_images.append(decode_latent(pred_original_sample, **decode_kwargs))
+                
+        return pred_images, pred_latents
+        
+    ## Inversion (https://github.com/huggingface/diffusion-models-class/blob/main/unit4/01_ddim_inversion.ipynb)
+    def invert_process(self, input, denoise_kwargs):
+        pred_images = []
+        pred_latents = []
+        
+        decode_kwargs = {'vae': vae}
+
+        # Reversed timesteps <<<<<<<<<<<<<<<<<<<<
+        timesteps = reversed(self.scheduler.timesteps)
+        num_inference_steps = len(self.scheduler.timesteps)
+
+        # For text condition on stable diffusion
+        if 'encoder_hidden_states' in denoise_kwargs.keys():
+            bs = denoise_kwargs['encoder_hidden_states'].shape[0]
+            input = torch.cat([input] * bs)
+        with torch.no_grad():
+            for i in tqdm(range(0, num_inference_steps)):
+                t = timesteps[i]
+                self.cur_t = t.item()
+                noisy_residual = self.unet(input, t.to(input.device), **denoise_kwargs).sample
+                noise_pred = noisy_residual
+                if noisy_residual.shape[0] == 2:
+                    # perform guidance
+                    noise_pred_text, noise_pred_uncond = noisy_residual.chunk(2)
+                    noisy_residual = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+                    input, _ = input.chunk(2)
+
+                current_t = max(0, t.item() - (1000//num_inference_steps)) #t
+                next_t = t # min(999, t.item() + (1000//num_inference_steps)) # t+1
+                alpha_t = self.scheduler.alphas_cumprod[current_t]
+                alpha_t_next = self.scheduler.alphas_cumprod[next_t]
+
+                latents = input
+                latents = (latents - (1-alpha_t).sqrt()*noise_pred)*(alpha_t_next.sqrt()/alpha_t.sqrt()) + (1-alpha_t_next).sqrt()*noise_pred
+                
+                input = latents
+                
+                pred_latents.append(latents)
+                pred_images.append(decode_latent(latents, **decode_kwargs))
+                
+        return pred_images, pred_latents
+        
+    # ============================ hook operations ===============================
+    def __get_query_key_value(self, name):
+        def hook(model, input, output):
+            if self.trigger_get_qkv:
+                _, query, key, value, hidden_feature = attention_op(model, input[0])
+                self.attn_features[name][int(self.cur_t)] = (query.detach(), key.detach(), value.detach(), hidden_feature.detach())
+            
+        return hook
+
+    def __modify_self_attn_qkv(self, name):
+        def hook(model, input, output):
+            if self.trigger_modify_qkv:
+                _, q_cs, k_cs, v_cs, _ = attention_op(model, input[0])
+                ca_ls = unet_wrapper.attention_mask[:3]
+                sa_ls = unet_wrapper.attention_mask[3:-4]
+                flat_mask_ls = unet_wrapper.attention_mask[-4:-1]
+                mask = unet_wrapper.attention_mask[-1]
+                
+                q_c, k_c, v_c, f_c, q_s, k_s, v_s, f_s = self.attn_features_modify[name][int(self.cur_t)] 
+                
+                # Fuse q_c (denoising branck) and q_cs (content DDIM inversion). Default gamma=1.0
+                q_hat_cs = q_c * self.style_transfer_params['gamma'] + q_cs * (1 - self.style_transfer_params['gamma'])
+
+                self.zero_mode = "mask"
+
+                if self.zero_mode == 'mask':
+                    _, _, _, _, modified_output_ca = attention_op(
+                        model, input[0], key=k_s, value=v_s, query=q_hat_cs, temperature=self.style_transfer_params['tau'],
+                        attention_mask_ls=ca_ls,
+                        )
+                    _, _, _, _, modified_output_sa = attention_op(
+                        model, input[0], key=k_c, value=v_c, query=q_c, temperature=self.style_transfer_params['tau'],
+                        attention_mask_ls=sa_ls,
+                        )
+                    hw = modified_output_sa.shape[1] # [2, hw, dim]
+                    if hw == 2304: 
+                        modified_output = combine_modified_outputs(modified_output_ca, modified_output_sa, flat_mask_ls[0])
+                    elif hw == 576: 
+                        modified_output = combine_modified_outputs(modified_output_ca, modified_output_sa, flat_mask_ls[1])
+                    elif hw == 9216: 
+                        modified_output = combine_modified_outputs(modified_output_ca, modified_output_sa, flat_mask_ls[2])
+
+                return modified_output
+        return hook
+    # ============================ hook operations ===============================
+
+if __name__ == "__main__":
+    # cfg = get_args()
+    sd_version = '2.1'
+    json_file = "./_input/_json/zero.json"
+
+    with open(json_file, 'r', encoding='utf-8') as file:
+        data = json.load(file)
+        for item in data:
+            t0 = time()
+            if item['active'] == False:
+                continue
+            img_size = item["resolution"]
+            frame_id = item["frame_id"]
+            exp_name = item["exp_name"]
+            appearance = item["appearance"]
+            anchor_frame = item["anchor_frame"]
+            zero_mode = item["zero_mode"]
+            
+            content_folder = f"./_input/_data/{exp_name}/content"
+            style_path = f"./_input/_data/{exp_name}/style/frame_{anchor_frame:04d}_{appearance}.png"
+            anchor_path = f"{content_folder}/frame_{anchor_frame:04d}.png"
+            
+            ddim_steps = 20
+            device = "cuda"
+            dtype = torch.float16
+            guidance_scale = 0.0 # Text = None
+            
+            style_text = ""
+            content_text = ""
+            
+            # Fixed. Our method DO NOT require hyperparameter tuning!
+            style_transfer_params = {
+                "injection_layers": list(range(3, 12)),     # feature manipulation layers. Note that only 3-12 layers have attention module
+                'gamma': 1.0,                               # Fuse q_c (denoising branck) and q_cs (content DDIM inversion). Default gamma=1.0
+                'tau': 1.0,                                 # attention Softmax temperature. when tau>1, the distribution becomes more concentrated.
+                'top_k': 1                                  # Select top-k of DIFT correspondance as attention 
+                }
+
+            # Init style transfer module
+            vae, tokenizer, text_encoder, unet, scheduler = load_stable_diffusion(sd_version=sd_version, precision_t=dtype)
+            scheduler.set_timesteps(ddim_steps)
+            sample_size = unet.config.sample_size
+
+            unet_wrapper = style_transfer_module(zero_mode, unet, vae, text_encoder, tokenizer, scheduler, style_transfer_params=style_transfer_params)
+            
+            # Cache DDIM inversion features (Q, K, V, O)
+            style_latent, style_features, _ = image_inversion(style_path, style_text, unet_wrapper)
+
+            for i in range(frame_id[0], frame_id[1], frame_id[2]):
+                if i == frame_id[0]:
+                    dift = SDFeaturizer("./_pretrained_model/stable-diffusion-2-1-base", null_prompt='')
+                content_path = f"{content_folder}/frame_{i:04d}.png"
+
+                mask_folder = content_folder.replace("content", "mask")
+                mask_path = f"{mask_folder}/frame_{i:04d}.png"
+                mask_image = cv2.imread(mask_path)[:, :, 0]
+
+                try:
+                    content_image = cv2.imread(content_path)[:, :, ::-1]
+                    content_image = cv2.resize(content_image, (img_size[1], img_size[0]))
+                    content_latent, content_features, _ = image_inversion(content_path, content_text, unet_wrapper)
+                except:
+                    print(f"cannot found frame {content_folder}/frame_{i:04d}: processing images finished")
+                    break
+                
+                cos_map_matrix, cos_map_matrix_d2, cos_map_matrix_u2 = extract_mask_topk(
+                    dift=dift,
+                    src_image_path = content_path,
+                    trg_image_path = anchor_path,
+                    img_size = img_size, # [512, 1024]
+                    up_ft_index = 1,
+                    top_k = style_transfer_params["top_k"],
+                    )
+
+                cos_map_matrix = rearrange(cos_map_matrix, 'n h w a b -> n (h w) (a b)')
+                cos_map_matrix_d2 = rearrange(cos_map_matrix_d2, 'n h w a b -> n (h w) (a b)')
+                cos_map_matrix_u2 = rearrange(cos_map_matrix_u2, 'n h w a b -> n (h w) (a b)')
+                
+                ca_mask, sa_mask, flat_mask = mask_to_attention_matrix(cv2.resize(mask_image, [48, 48]))
+                ca_mask_d2, sa_mask_d2, flat_mask_d2 = mask_to_attention_matrix(cv2.resize(mask_image, [24, 24]))
+                ca_mask_u2, sa_mask_u2, flat_mask_u2 = mask_to_attention_matrix(cv2.resize(mask_image, [96, 96]))
+
+                ca_mask = ca_mask * cos_map_matrix
+                ca_mask_d2 = ca_mask_d2 * cos_map_matrix_d2
+                ca_mask_u2 = ca_mask_u2 * cos_map_matrix_u2
+                
+                unet_wrapper.attention_mask = [ca_mask, ca_mask_d2, ca_mask_u2, sa_mask, sa_mask_d2, sa_mask_u2, flat_mask, flat_mask_d2, flat_mask_u2, mask_image]
+
+                # Load DDIM inversion features (Q, K, V, O)
+                for layer_name in style_features.keys():
+                    unet_wrapper.attn_features_modify[layer_name] = {}
+                    for t in scheduler.timesteps:
+                        t = t.item()
+                        unet_wrapper.attn_features_modify[layer_name][t] = (
+                            content_features[layer_name][t][0], content_features[layer_name][t][1], content_features[layer_name][t][2], content_features[layer_name][t][3],
+                            style_features[layer_name][t][0], style_features[layer_name][t][1], style_features[layer_name][t][2], style_features[layer_name][t][3]
+                        )     
+
+                # Start Appearance transfer
+                unet_wrapper.trigger_get_qkv = False
+                unet_wrapper.trigger_modify_qkv = True
+                denoise_kwargs = unet_wrapper.get_text_condition(content_text)
+                latent_cs = content_latent
+
+                print("Appearance transfer...")
+                images, latents = unet_wrapper.reverse_process(latent_cs, denoise_kwargs=denoise_kwargs) # reverse process save activations such as attn, res
+                images = [denormalize(input)[0] for input in images]
+                image_last = images[-1]
+                images = np.concatenate(images, axis=1)
+
+                save_dir = f"./_result/zero_stage_{zero_mode}"
+                os.makedirs(save_dir, exist_ok=True)
+
+                save_folder = os.path.join(save_dir, f"{item['exp_name']}_{item['appearance']}") 
+                os.makedirs(save_folder, exist_ok=True)
+                
+                file_name = f"frame_{i:04d}"
+                save_image(image_last, f"{save_folder}/{file_name}.png")
+                print(f"save to {save_folder}/{file_name}.png")
+
+                create_video_from_images(
+                    save_folder,
+                    save_folder + "/video.mp4",
+                    fps=8
+                )
