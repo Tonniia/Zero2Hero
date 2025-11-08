@@ -182,7 +182,7 @@ class style_transfer_module():
                 # Fuse q_c (denoising branck) and q_cs (content DDIM inversion). Default gamma=1.0
                 q_hat_cs = q_c * self.style_transfer_params['gamma'] + q_cs * (1 - self.style_transfer_params['gamma'])
 
-                if self.zero_mode == 'mask':
+                if self.zero_mode == 'attn':
                     _, _, _, _, modified_output = attention_op(
                         model, input[0], key=k_s, value=v_s, query=q_hat_cs, temperature=self.style_transfer_params['tau'],
                         attention_mask_ls=attention_mask_ls,
@@ -208,9 +208,8 @@ class style_transfer_module():
     # ============================ hook operations ===============================
 
 if __name__ == "__main__":
-    # cfg = get_args()
-    sd_version = '2.1'
-    json_file = "./_input/_json/colorization.json"
+    sd_version = '2.1' # default
+    json_file = "./_input/zero.json"
 
     with open(json_file, 'r', encoding='utf-8') as file:
         data = json.load(file)

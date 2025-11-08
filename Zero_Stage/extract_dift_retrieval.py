@@ -52,11 +52,7 @@ def func_cos_map_matrix_topk_ls(cos_map_matrix_ls, top_k_matrix_ls):
     mask_ls = [
         torch.zeros_like(cos_map_matrix) for cos_map_matrix in cos_map_matrix_ls
     ]
-    # if top_k == -1:
-    #     top_k_ls = [int(torch.numel(cos_map_matrix[0][0][0].view(-1))) for cos_map_matrix in cos_map_matrix_ls]
-    # else:
-    #     top_k_ls = [top_k, max(int(top_k/4), 1), int(top_k*4)]
-        
+
     for i, cos_map_matrix in enumerate(cos_map_matrix_ls):
         h, w = cos_map_matrix.shape[1], cos_map_matrix.shape[2]
         top_k_matrix = top_k_matrix_ls[i]
@@ -197,19 +193,12 @@ def get_top1_radius_mask(cos_map, r):
     row, col = divmod(int(indices[0]), cos_map.shape[2])
     mask = torch.zeros_like(cos_map)
     mask[0][row][col] = 1
-
-    # �算圆的半径
     radius = r
-
-    # �历所有可能的点
     for i in range(max(0, row - radius), min(height, row + radius + 1)):
         for j in range(max(0, col - radius), min(width, col + radius + 1)):
-            # �算点到中心的距离
             distance = math.sqrt((i - row) ** 2 + (j - col) ** 2)
-            # 如果点在圆内，设置掩码值为1
             if distance <= radius:
                 mask[0][i][j] = 1
-
     return mask
 
 
@@ -342,18 +331,6 @@ def extract_inds(dift, src_image_path, trg_image_path, up_ft_index, img_size):
     src_ft_d2 = nn.Upsample(size=(int(src_ft.shape[2]/2), int(src_ft.shape[3]/2)), mode='bilinear')(src_ft)
     src_ft_u2 = nn.Upsample(size=(int(src_ft.shape[2]*2), int(src_ft.shape[3]*2)), mode='bilinear')(src_ft)
 
-    # tgt_coords = torch.full((src_ft.shape[2], src_ft.shape[3], 2), -1, dtype=torch.long)  # 默认值为 (-1, -1)
-
-    # for y in list(range(src_ft.shape[2])): 
-    #     for x in list(range(src_ft.shape[3])):
-    #         src_vec = F.normalize(src_ft[0, :, y, x].view(1, num_channel))
-    #         cos_map = torch.matmul(src_vec, trg_vec).view(1, src_ft.shape[2], src_ft.shape[3]) 
-    #         _, max_idx = torch.max(cos_map.view(-1), dim=0)
-    #         tgt_y, tgt_x = divmod(max_idx.item(), cos_map.shape[2])
-            
-    #         # 存储 tgt token 的坐标
-    #         tgt_coords[y, x] = torch.tensor([tgt_y, tgt_x], dtype=torch.long)
-
     tgt_coords = torch.full((src_ft.shape[2]*src_ft.shape[3], 1), -1, dtype=torch.long)  
 
     for y in list(range(src_ft.shape[2])): 
@@ -362,8 +339,7 @@ def extract_inds(dift, src_image_path, trg_image_path, up_ft_index, img_size):
             cos_map = torch.matmul(src_vec, trg_vec).view(1, src_ft.shape[2], src_ft.shape[3]) 
             _, max_idx = torch.max(cos_map.view(-1), dim=0)
             # tgt_y, tgt_x = divmod(max_idx.item(), cos_map.shape[2])
-            
-            # 存储 tgt token 的坐标
+
             # y * width + x
             tgt_coords[y*src_ft.shape[3]+x] = torch.tensor([max_idx], dtype=torch.long)
           
@@ -459,8 +435,7 @@ def read_jsonl(file_path):
     data_list = []
     with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
-            # 每一行是一个 JSON 对象
-            if line.strip():  # 确保非空行
+            if line.strip():
                 try:
                     item = json.loads(line.strip())
                     data_list.append(item)

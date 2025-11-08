@@ -19,7 +19,7 @@ To evaluate consistency more accurately, we construct a group of videos with mul
 
 Our method contains two stages.
 ## Pre-preparation
-- Download SDv1.5 or SD2.1(defualt) for Zero-Stage appearance transfer. Put under `./_pretrained_model/stable-diffusion-2-1-base`
+- Download SDv1.5 or SD2.1(default) for Zero-Stage appearance transfer. Put under `./_pretrained_model/stable-diffusion-2-1-base`
 - Download FLUX.1-dev for Hero-Stage conditional generative model fune-tuning. LoRA rank r=32 under resolution of 512 requires 80GB. 
     - (TODO: find more light-weight DiT-based diffusion model as base model)
 - `pip install -r requirements.txt`
@@ -27,9 +27,10 @@ Our method contains two stages.
 
 ## Zero-Stage: zero-shot initialization
 - select an anchor frame, and edit it use WebUI, ComfyUI with ControlNet to get reference. We have prepared several reference for *car-turn*.
-- prepare data folder at `./_input/_data/car_turn`. `content` are target frames, `style` are reference. 
-    - We have prepared several reference for *car-turn* with anchor frame .appearance_name selected in ['rainbow', 'watercolor1', 'red'] . The name of reference: `frame_{anchor_id}_{appearance_name}.png`
-- check zero-shot settings at `./_input/_json/zero.json`. ensure `anchor_frame` and `appearance` is corresponding to you selected. 
+- prepare data folder at `./_input/_data/`. `content` are target frames, `style` are reference. 
+    - We have prepared case study of *car-turn* 
+- check zero-shot settings at `./_input/_json/zero.json`. ensure `anchor_frame` and `appearance` is corresponding to you selected. `zero_mode` defines how to leverage Corr during the Zero-Stage. Setting `zero_mode: attn` (Mask-Attn in Eq.2) with k=1 is recommended for most scenarios.
+- Do not require hyperparameter tuning. 
 - run:
 
 ```
@@ -37,7 +38,7 @@ python ./Zero_Stage/run_zero.py
 ```
 <!-- - We have provided intermediate result, saved in `./_result/zero_stage/1.0_1.0_k=1_100` -->
 
-- Zero-Stage with Adaptive-k strategy have been accepted by IJCAI 2025 AI, the Arts and Creativity track ([paper](assets/tongtong_IJCAI25.pdf)). We further explore few-shot training without hand-craft design, with an addtional Hero-Stage:
+<!-- - Zero-Stage with Adaptive-k strategy have been accepted by IJCAI 2025 AI, the Arts and Creativity track ([paper](assets/tongtong_IJCAI25.pdf)). We further explore few-shot training without hand-craft design, with an addtional Hero-Stage: -->
 
 ## Hero-Stage
 - add Hero-Stage training data jsons at `./_input/_json/hero_stage/`

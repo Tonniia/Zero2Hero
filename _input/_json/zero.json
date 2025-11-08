@@ -1,0 +1,11 @@
+[
+    {
+        "active": true,
+        "anchor_frame": 2,
+        "appearance": "rainbow",
+        "exp_name": "car_turn",
+        "zero_mode": "attn",
+        "frame_id": [0, 16, 1],
+        "resolution": [768, 768]
+    }
+]
