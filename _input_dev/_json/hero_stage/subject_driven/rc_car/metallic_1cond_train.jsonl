@@ -1,0 +1,5 @@
+{
+    "source": "./_result/zero_stage_mask/subject_driven/rc_car_metallic/frame_0000.png", 
+    "caption": "an image",
+    "target": "./_input_dev/_data/subject_driven/rc_car/style/frame_0000_metallic.png"
+}

@@ -1,0 +1,43 @@
+[
+    {
+        "active": true,
+        "source_sbj": "./_input_dev/_data/subject_driven/robot_toy/style/frame_0000_rainbow.png", 
+        "source_inp": "./_input_dev/_data/subject_driven/robot_toy/mask/frame_0000.png",
+        "text": "an image",
+        "target_path": "./_input_dev/_data/subject_driven/robot_toy/style/frame_0000_rainbow.png",
+        "is_metric": true
+    },
+    {
+        "active": true,
+        "source_sbj": "./_input_dev/_data/subject_driven/robot_toy/style/frame_0000_rainbow.png", 
+        "source_inp": "./_input_dev/_data/subject_driven/robot_toy/mask/frame_0001.png",
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    },
+    {
+        "active": true,
+        "source_sbj": "./_input_dev/_data/subject_driven/robot_toy/style/frame_0000_rainbow.png", 
+        "source_inp": "./_input_dev/_data/subject_driven/robot_toy/mask/frame_0002.png",
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    },
+    {
+        "active": true,
+        "source_sbj": "./_input_dev/_data/subject_driven/robot_toy/style/frame_0000_rainbow.png", 
+        "source_inp": "./_input_dev/_data/subject_driven/robot_toy/mask/frame_0003.png",
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    },
+    {
+        "active": true,
+        "source_sbj": "./_input_dev/_data/subject_driven/robot_toy/style/frame_0000_rainbow.png", 
+        "source_inp": "./_input_dev/_data/subject_driven/robot_toy/mask/frame_0004.png",
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    }
+]
+

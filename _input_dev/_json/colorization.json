@@ -1,0 +1,92 @@
+[
+    {
+        "active": true,
+        "anchor_frame": 0,
+        "appearance": "color",
+        "exp_name": "colorization_input/boxer_cartoon_input",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [512, 512]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color",
+        "exp_name": "colorization_input/car_red_input",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [512, 512]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color",
+        "exp_name": "colorization_input/cat_dog_input",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [512, 512]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color",
+        "exp_name": "colorization_input/cat_white_input",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [512, 512]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color",
+        "exp_name": "colorization_input/deer_white_input",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [512, 512]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color",
+        "exp_name": "colorization_input/fox_greeting_input",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [512, 512]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color",
+        "exp_name": "colorization_input/glass_cg_input",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [512, 512]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color",
+        "exp_name": "colorization_input/man_surfing_input",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [512, 512]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color",
+        "exp_name": "colorization_input/woman_cg_input",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [512, 512]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color",
+        "exp_name": "colorization_input/boxer_cartoon_input",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [512, 512]
+    }    
+]

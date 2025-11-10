@@ -1,0 +1,16 @@
+[
+    {
+        "active": true,
+        "lora_folder": "./_result/hero_stage/Mode2/car_turn_rainbow/20250529-160557",
+        "source_zero_folder": "./_result/zero_stage/1.0_1.0_k=1_100/CG_car_2_rainbow",
+        "source_tgt_folder": "./_input/_data/CG_car_2/content",
+        "target_folder": "",
+        "lora_step": 200,
+        "exp_name": "car_turn",
+        "appearance_name": "rainbow",
+        "prompt": "a car is on the road",
+        "frame_id": [0, 16, 1],
+        "image_size": [384, 384],
+        "mask_setting": "no"
+    }
+]

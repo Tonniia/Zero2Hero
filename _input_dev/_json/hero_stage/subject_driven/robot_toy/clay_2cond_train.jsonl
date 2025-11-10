@@ -1,0 +1,6 @@
+{
+    "source_zero": "./_result/zero_stage_mask/subject_driven/robot_toy_clay/frame_0000.png", 
+    "source_tgt": "./_input_dev/_data/subject_driven/robot_toy/content/frame_0000.png",
+    "caption": "an image",
+    "target": "./_input_dev/_data/subject_driven/robot_toy/style/frame_0000_clay.png"
+}

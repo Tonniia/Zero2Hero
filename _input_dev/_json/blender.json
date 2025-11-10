@@ -1,0 +1,11 @@
+[
+    {
+        "active": true,
+        "anchor_frame": 0,
+        "appearance": "color1",
+        "exp_name": "blender/audi_round",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 5],
+        "resolution": [768, 768]
+    }
+]

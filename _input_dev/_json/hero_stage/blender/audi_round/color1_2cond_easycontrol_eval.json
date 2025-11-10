@@ -1,0 +1,35 @@
+[
+    {
+        "active": true,
+        "source_sbj": "./_input/_data/blender/audi_round/style/frame_0000_color1.png", 
+        "source_inp": "./_input/_data/blender/audi_round/content_masked/frame_0000.png",
+        "text": "a 3D model",
+        "target_path": "./_input/_data/blender/audi_round/content_color1/frame_0000.png",
+        "is_metric": true
+    },
+    {
+        "active": true,
+        "source_sbj": "./_input/_data/blender/audi_round/style/frame_0000_color1.png", 
+        "source_inp": "./_input/_data/blender/audi_round/content_masked/frame_0005.png",
+        "text": "a 3D model",
+        "target_path": "./_input/_data/blender/audi_round/content_color1/frame_0005.png",
+        "is_metric": true
+    },
+    {
+        "active": true,
+        "source_sbj": "./_input/_data/blender/audi_round/style/frame_0000_color1.png", 
+        "source_inp": "./_input/_data/blender/audi_round/content_masked/frame_0010.png",
+        "text": "a 3D model",
+        "target_path": "./_input/_data/blender/audi_round/content_color1/frame_0010.png",
+        "is_metric": true
+    },
+    {
+        "active": true,
+        "source_sbj": "./_input/_data/blender/audi_round/style/frame_0000_color1.png", 
+        "source_inp": "./_input/_data/blender/audi_round/content_masked/frame_0015.png",
+        "text": "a 3D model",
+        "target_path": "./_input/_data/blender/audi_round/content_color1/frame_0015.png",
+        "is_metric": true
+    }
+]
+

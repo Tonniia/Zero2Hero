@@ -1,0 +1,16 @@
+[
+    {
+        "active": true,
+        "lora_folder": "",
+        "source_folder": "./_result/zero_stage_mask/subject_driven/robot_toy_metallic",
+        "target_folder": "",
+        "lora_step": 400,
+        "exp_name": "blender/audi_round",
+        "appearance_name": "color1",
+        "prompt": "an image",
+        "frame_id": [0, 3, 1],
+        "image_size": [768, 768],
+        "mask_setting": "no",
+        "mode": "1cond"
+    }
+]

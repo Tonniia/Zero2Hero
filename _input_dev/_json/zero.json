@@ -1,0 +1,92 @@
+[
+    {
+        "active": false,
+        "anchor_frame": 2,
+        "appearance": "watercolor1",
+        "exp_name": "car_turn",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": false,
+        "anchor_frame": 2,
+        "appearance": "rainbow",
+        "exp_name": "car_turn",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": false,
+        "anchor_frame": 2,
+        "appearance": "red",
+        "exp_name": "car_turn",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color1",
+        "exp_name": "blender/audi_round",
+        "zero_mode": "mask",
+        "frame_id": [0, 16, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color2",
+        "exp_name": "gaoda_round",
+        "zero_mode": "mask",
+        "frame_id": [0, 30, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "rainbow",
+        "exp_name": "CG_car_2",
+        "zero_mode": "mask",
+        "frame_id": [0, 24, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color1",
+        "exp_name": "blender/garden/car5_cam5",
+        "zero_mode": "mask",
+        "frame_id": [0, 10, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "tex1",
+        "exp_name": "jie",
+        "zero_mode": "mask",
+        "frame_id": [0, 84, 5],
+        "resolution": [768, 768]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "color1",
+        "exp_name": "blender/audi_round",
+        "zero_mode": "mask",
+        "frame_id": [0, 9, 1],
+        "resolution": [768, 768]
+    },
+        {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "style1",
+        "exp_name": "subject_driven/colorful_sneaker_",
+        "zero_mode": "mask",
+        "frame_id": [0, 3, 1],
+        "resolution": [768, 768]
+    }
+]

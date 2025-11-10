@@ -1,0 +1,32 @@
+{
+    "source_sbj": "./_input/_data/blender/audi_round/style/frame_0000_color1.png", 
+    "source_inp": "./_input/_data/blender/audi_round/content_masked/frame_0000.png",
+    "caption": "a 3D model",
+    "target": "./_input/_data/blender/audi_round/style/frame_0000_color1.png"
+}
+{
+    "source_sbj": "./_input/_data/blender/audi_round/content/frame_0000.png", 
+    "source_inp": "./_input/_data/blender/audi_round/content_masked/frame_0000.png",
+    "caption": "a 3D model",
+    "target": "./_input/_data/blender/audi_round/content/frame_0000.png"
+}
+{
+    "source_sbj": "./_input/_data/blender/audi_round/content/frame_0000.png", 
+    "source_inp": "./_input/_data/blender/audi_round/content_masked/frame_0005.png",
+    "caption": "a 3D model",
+    "target": "./_input/_data/blender/audi_round/content/frame_0005.png"
+}
+{
+    "source_sbj": "./_input/_data/blender/audi_round/content/frame_0000.png", 
+    "source_inp": "./_input/_data/blender/audi_round/content_masked/frame_0010.png",
+    "caption": "a 3D model",
+    "target": "./_input/_data/blender/audi_round/content/frame_0010.png"
+}
+{
+    "source_sbj": "./_input/_data/blender/audi_round/content/frame_0000.png", 
+    "source_inp": "./_input/_data/blender/audi_round/content_masked/frame_0015.png",
+    "caption": "a 3D model",
+    "target": "./_input/_data/blender/audi_round/content/frame_0015.png"
+}
+
+

@@ -1,0 +1,65 @@
+[
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "clay",
+        "exp_name": "subject_driven/robot_toy",
+        "zero_mode": "warpO",
+        "frame_id": [0, 5, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "crystal",
+        "exp_name": "subject_driven/robot_toy",
+        "zero_mode": "warpO",
+        "frame_id": [0, 5, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": false,
+        "anchor_frame": 0,
+        "appearance": "metallic",
+        "exp_name": "subject_driven/robot_toy",
+        "zero_mode": "warpO",
+        "frame_id": [0, 5, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": true,
+        "anchor_frame": 0,
+        "appearance": "orangeblue",
+        "exp_name": "subject_driven/robot_toy",
+        "zero_mode": "warpO",
+        "frame_id": [0, 5, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": true,
+        "anchor_frame": 0,
+        "appearance": "purplegreen",
+        "exp_name": "subject_driven/robot_toy",
+        "zero_mode": "warpO",
+        "frame_id": [0, 5, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": true,
+        "anchor_frame": 0,
+        "appearance": "rainbow",
+        "exp_name": "subject_driven/robot_toy",
+        "zero_mode": "warpO",
+        "frame_id": [0, 5, 1],
+        "resolution": [768, 768]
+    },
+    {
+        "active": true,
+        "anchor_frame": 0,
+        "appearance": "wooden",
+        "exp_name": "subject_driven/robot_toy",
+        "zero_mode": "warpO",
+        "frame_id": [0, 5, 1],
+        "resolution": [768, 768]
+    }
+]

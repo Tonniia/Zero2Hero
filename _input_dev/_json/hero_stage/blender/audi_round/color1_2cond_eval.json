@@ -1,0 +1,27 @@
+[
+    {
+        "active": true,
+        "source_zero": "./_result/zero_stage_mask/blender/audi_round_color1/frame_0000.png", 
+        "source_tgt": "./_input/_data/blender/audi_round/content/frame_0000.png", 
+        "text": "a car is on the road",
+        "target_path": "./_input/_data/blender/audi_round/style/frame_0000_color1.png",
+        "is_metric": true
+    },
+    {   
+        "active": true,
+        "source_zero": "./_result/zero_stage_mask/blender/audi_round_color1/frame_0005.png", 
+        "source_tgt": "./_input/_data/blender/audi_round/content/frame_0005.png", 
+        "text": "a car is on the road",
+        "target_path": "./_input/_data/blender/audi_round/content_color1/frame_0005.png",
+        "is_metric": true
+    },
+    {   
+        "active": true,
+        "source_zero": "./_result/zero_stage_mask/blender/audi_round_color1/frame_0010.png", 
+        "source_tgt": "./_input/_data/blender/audi_round/content/frame_0010.png", 
+        "text": "a car is on the road",
+        "target_path": "./_input/_data/blender/audi_round/content_color1/frame_0010.png",
+        "is_metric": true
+    }
+]
+

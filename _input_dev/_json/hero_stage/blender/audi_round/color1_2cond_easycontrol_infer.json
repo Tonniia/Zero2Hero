@@ -1,0 +1,17 @@
+[
+    {
+        "active": true,
+        "lora_folder": "./_result/hero_stage/easy_sub_inp/blender/audi_round_color1/20251107-214659",
+        "source_sbj_folder": "./_input/_data/blender/audi_round/content_color1/frame_0000.png",
+        "source_inp_folder": "./_input/_data/blender/audi_round/content_masked",
+        "target_folder": "./_input/_data/blender/audi_round/content_color1",
+        "lora_step": 400,
+        "exp_name": "blender/audi_round",
+        "appearance_name": "color1",
+        "prompt": "a 3D model",
+        "frame_id": [0, 16, 5],
+        "image_size": [768, 768],
+        "mask_setting": "no",
+        "mode": "sbj_inp"
+    }
+]

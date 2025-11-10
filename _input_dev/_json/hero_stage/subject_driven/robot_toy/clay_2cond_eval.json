@@ -1,0 +1,43 @@
+[
+    {
+        "active": true,
+        "source_zero": "./_result/zero_stage_mask/subject_driven/robot_toy_clay/frame_0000.png", 
+        "source_tgt": "./_input_dev/_data/subject_driven/robot_toy/content/frame_0000.png", 
+        "text": "an image",
+        "target_path": "./_input_dev/_data/subject_driven/robot_toy/style/frame_0000_clay.png",
+        "is_metric": true
+    },
+    {   
+        "active": true,
+        "source_zero": "./_result/zero_stage_mask/subject_driven/robot_toy_clay/frame_0001.png", 
+        "source_tgt": "./_input_dev/_data/subject_driven/robot_toy/content/frame_0001.png", 
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    },
+    {   
+        "active": true,
+        "source_zero": "./_result/zero_stage_mask/subject_driven/robot_toy_clay/frame_0002.png", 
+        "source_tgt": "./_input_dev/_data/subject_driven/robot_toy/content/frame_0002.png", 
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    },
+    {   
+        "active": true,
+        "source_zero": "./_result/zero_stage_mask/subject_driven/robot_toy_clay/frame_0003.png", 
+        "source_tgt": "./_input_dev/_data/subject_driven/robot_toy/content/frame_0003.png", 
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    },
+    {   
+        "active": true,
+        "source_zero": "./_result/zero_stage_mask/subject_driven/robot_toy_clay/frame_0004.png", 
+        "source_tgt": "./_input_dev/_data/subject_driven/robot_toy/content/frame_0004.png", 
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    }
+]
+

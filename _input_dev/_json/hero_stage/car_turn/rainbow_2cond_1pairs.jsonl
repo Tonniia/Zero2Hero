@@ -1,0 +1,7 @@
+{
+    "source_zero": "./_result/zero_stage_mask/car_turn_rainbow/frame_0002.png", 
+    "source_tgt": "./_input/_data/car_turn/content/frame_0002.png",
+    "caption": "a car is on the road",
+    "target": "./_input/_data/car_turn/style/frame_0002_rainbow.png"
+}
+

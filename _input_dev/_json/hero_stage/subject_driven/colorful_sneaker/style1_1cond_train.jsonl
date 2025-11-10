@@ -1,0 +1,5 @@
+{
+    "source": "./_result/zero_stage_mask/subject_driven/colorful_sneaker_style1/frame_0000.png", 
+    "caption": "an image",
+    "target": "./_input_dev/_data/subject_driven/colorful_sneaker/style/frame_0000_style1.png"
+}

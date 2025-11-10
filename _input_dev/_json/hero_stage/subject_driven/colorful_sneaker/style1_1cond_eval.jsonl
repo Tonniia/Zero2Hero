@@ -1,0 +1,24 @@
+[
+    {
+        "active": true,
+        "source_path": "./_result/zero_stage_mask/subject_driven/colorful_sneaker_style1/frame_0000.png", 
+        "text": "an image",
+        "target_path": "./_input/_data/subject_driven/colorful_sneaker/style/frame_0000_style1.png",
+        "is_metric": true
+    },
+    {   
+        "active": true,
+        "source_path": "./_result/zero_stage_mask/subject_driven/colorful_sneaker_style1/frame_0001.png", 
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    },
+    {   
+        "active": true,
+        "source_path": "./_result/zero_stage_mask/subject_driven/colorful_sneaker_style1/frame_0002.png", 
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    }
+]
+

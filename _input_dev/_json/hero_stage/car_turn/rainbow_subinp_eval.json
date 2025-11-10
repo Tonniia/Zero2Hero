@@ -1,0 +1,35 @@
+[
+    {
+        "active": true,
+        "source_sbj": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow.png", 
+        "source_inp": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0002.jpg",
+        "text": "an image",
+        "target_path": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow.png",
+        "is_metric": true
+    },
+    {
+        "active": true,
+        "source_sbj": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow.png", 
+        "source_inp": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0005.jpg",
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    },
+    {
+        "active": true,
+        "source_sbj": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow.png", 
+        "source_inp": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0010.jpg",
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    },
+    {
+        "active": true,
+        "source_sbj": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow.png", 
+        "source_inp": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0010.jpg",
+        "text": "an image",
+        "target_path": "",
+        "is_metric": false
+    }
+]
+
