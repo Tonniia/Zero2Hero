@@ -182,6 +182,13 @@ class style_transfer_module():
                 # Fuse q_c (denoising branck) and q_cs (content DDIM inversion). Default gamma=1.0
                 q_hat_cs = q_c * self.style_transfer_params['gamma'] + q_cs * (1 - self.style_transfer_params['gamma'])
 
+                if q_c.shape[1] == attention_mask_ls[0].shape[1]:
+                    indices = torch.argmax(attention_mask_ls[0], dim=2).squeeze(0) 
+                if q_c.shape[1] == attention_mask_ls[1].shape[1]:
+                    indices = torch.argmax(attention_mask_ls[1], dim=2).squeeze(0) 
+                if q_c.shape[1] == attention_mask_ls[2].shape[1]:
+                    indices = torch.argmax(attention_mask_ls[2], dim=2).squeeze(0) 
+                    
                 if self.zero_mode == 'attn':
                     _, _, _, _, modified_output = attention_op(
                         model, input[0], key=k_s, value=v_s, query=q_hat_cs, temperature=self.style_transfer_params['tau'],

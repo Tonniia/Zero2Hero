@@ -101,9 +101,9 @@ def get_unet_layers_tt(unet):
     # down_resnet_dict = {0: [0, 1], 1: [0], 2: 1, 3: [0, 1]}
     # down_temporal_dict = {0: [0, 1], 1: [0, 1], 2: [0, 1], 3:[0, 1]}
 
-    up_spatial_dict =      {               1: [0, 1, 2],   2: [0, 1, 2],   3: [0, 1, 2]}
-    up_resnet_dict =    {0: [0, 1, 2],  1: [0, 1, 2],   2: [0, 1, 2],   3: [0, 1, 2]}
-    up_temporal_dict =  {0: [0, 1, 2],  1: [0, 1, 2],   2: [0, 1, 2],   3: [0, 1, 2]}
+    up_spatial_dict     =  {               1: [0, 1, 2],   2: [0, 1, 2],   3: [0, 1, 2]}
+    up_resnet_dict      =  {0: [0, 1, 2],  1: [0, 1, 2],   2: [0, 1, 2],   3: [0, 1, 2]}
+    up_temporal_dict    =  {0: [0, 1, 2],  1: [0, 1, 2],   2: [0, 1, 2],   3: [0, 1, 2]}
     
     for up_block_idx in up_spatial_dict.keys():
         for layer_idx in up_spatial_dict[up_block_idx]:
@@ -118,47 +118,6 @@ def get_unet_layers_tt(unet):
             temporal_layers.append(getattr(unet, 'up_blocks')[up_block_idx].motion_modules[layer_idx]) 
 
     return resnet_layers, attn_layers, temporal_layers
-      
-
-def get_unet_layers_tt_downmidup(unet):
-    resnet_layers = []
-    attn_layers = []
-    temporal_layers = []
-
-    down_spatial_dict =     {0: [0, 1],     1: [0, 1],  2: [0, 1]               }
-    down_res_dict   =       {0: [0, 1],     1: [0, 1],  2: [0, 1],  3: [0, 1]    }
-    down_temporal_dict =    {0: [0, 1],     1: [0, 1],  2: [0, 1],  3: [0, 1]    }
-
-    up_spatial_dict =   {               1: [0, 1, 2],   2: [0, 1, 2],   3: [0, 1, 2]}
-    up_resnet_dict =    {0: [0, 1, 2],  1: [0, 1, 2],   2: [0, 1, 2],   3: [0, 1, 2]}
-    up_temporal_dict =  {0: [0, 1, 2],  1: [0, 1, 2],   2: [0, 1, 2],   3: [0, 1, 2]}
-
-    mid_attn_dict =         {0: [0]}
-
-    for down_block_idx in down_spatial_dict.keys():
-        for layer_idx in down_spatial_dict[down_block_idx]:
-            attn_layers.append(getattr(unet, 'down_blocks')[down_block_idx].attentions[layer_idx])
-    for down_block_idx in down_temporal_dict.keys():
-        for layer_idx in down_temporal_dict[down_block_idx]:
-            temporal_layers.append(getattr(unet, 'down_blocks')[down_block_idx].motion_modules[layer_idx])
-
-    attn_layers.append(getattr(unet, 'mid_block').attentions[0])
-    temporal_layers.append(getattr(unet, 'mid_block').motion_modules[0])
-
-    for up_block_idx in up_spatial_dict.keys():
-        for layer_idx in up_spatial_dict[up_block_idx]:
-            attn_layers.append(getattr(unet, 'up_blocks')[up_block_idx].attentions[layer_idx])
-    
-    for up_block_idx in up_resnet_dict.keys():
-        for layer_idx in up_resnet_dict[up_block_idx]:
-            resnet_layers.append(getattr(unet, 'up_blocks')[up_block_idx].resnets[layer_idx]) 
-    
-    for up_block_idx in up_temporal_dict.keys():
-        for layer_idx in up_temporal_dict[up_block_idx]:
-            temporal_layers.append(getattr(unet, 'up_blocks')[up_block_idx].motion_modules[layer_idx]) 
-
-    return resnet_layers, attn_layers, temporal_layers
-
             
 # Diffusers attention code for getting query, key, value and attention map
 def attention_op(
