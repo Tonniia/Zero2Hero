@@ -9,8 +9,9 @@ In our Zero-Stage, we leverage correspondence within the original frames to guid
 To evaluate consistency more accurately, we construct a group of videos with multiple appearances using Blender, which supports fine-grained evaluation. Our method outperforms the best-performing baseline with a PSNR improvement of 2.6 dB.
 
 ![teasor](assets/teasor.jpg)
+![teasor](assets/kirby_3d.png)
 
-[2025.10] We add comparisons with recent reference-based image/video editing works, [ACE++](https://github.com/ali-vilab/ACE_plus), [EasyControl](https://github.com/Xiaojiu-z/EasyControl) and [VACE](https://github.com/ali-vilab/VACE), on appearance transfer task. For ACE++ and EasyControl, the suitbale mode is reference/subject + inpaint. For VACE, we test it using both ref+inpaint and ref+depth mode. Our method excels at the **fine-grained appearance transfer** without structural changes. This focus makes it distinct from, and complementary to, general editing. This task is vital for CG workflows like anime rendering and stylization.
+[2025.10] We add comparisons with recent reference-based image/video editing works, [ACE++](https://github.com/ali-vilab/ACE_plus), [EasyControl](https://github.com/Xiaojiu-z/EasyControl) and [VACE](https://github.com/ali-vilab/VACE), on appearance transfer task. For ACE++ and EasyControl, the suitbale mode is reference/subject + inpaint. For VACE, we test it using both ref+inpaint and ref+depth mode. For EasyControl, for fair comparison with our Hero-Stage, we augment the reference, and optimize the model to fit on reference reconstruction. Without Zero-Stage initialization, this "inpaint" mode cannot generalize well to other frames. Our method excels at the **fine-grained appearance transfer** without structural changes. This focus makes it distinct from, and complementary to, general editing. This task is vital for CG workflows like anime rendering and stylization.
 
 
 ![teasor](assets/VACE_ACE_baselines.png)
