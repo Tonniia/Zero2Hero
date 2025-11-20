@@ -1,42 +1,30 @@
 {
-    "source_sbj": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow.png", 
-    "source_inp": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0002.jpg", 
+    "source_sbj": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/style/ref_0002_rainbow.png", 
+    "source_inp": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0002.jpg", 
     "caption": "an image",
-    "target": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow_1.png"
+    "target": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/mask_fill/frame_0002_rainbow.png"
 }
 {
-    "source_sbj": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow_1.png", 
-    "source_inp": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0002.jpg", 
+    "source_sbj": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/style/ref_0002_ori.png", 
+    "source_inp": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0002.jpg", 
     "caption": "an image",
-    "target": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow_1.png"
+    "target": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/mask_fill/frame_0002.png"
 }
 {
-    "source_sbj": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow_1.png", 
-    "source_inp": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0002.jpg", 
+    "source_sbj": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/style/ref_0002_ori.png", 
+    "source_inp": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0005.jpg", 
     "caption": "an image",
-    "target": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow_1.png"
+    "target": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/mask_fill/frame_0005.png"
 }
 {
-    "source_sbj": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow_1.png", 
-    "source_inp": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0002.jpg", 
+    "source_sbj": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/style/ref_0002_ori.png", 
+    "source_inp": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0010.jpg", 
     "caption": "an image",
-    "target": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/style/frame_0002_rainbow_1.png"
+    "target": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/mask_fill/frame_0010.png"
 }
 {
-    "source_sbj": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/content/frame_0002.png", 
-    "source_inp": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0005.jpg", 
+    "source_sbj": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/style/ref_0002_ori.png", 
+    "source_inp": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0015.jpg", 
     "caption": "an image",
-    "target": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/content/frame_0005.png"
-}
-{
-    "source_sbj": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/content/frame_0002.png", 
-    "source_inp": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0010.jpg", 
-    "caption": "an image",
-    "target": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/content/frame_0010.png"
-}
-{
-    "source_sbj": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/content/frame_0002.png", 
-    "source_inp": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/mask/frame_0015.jpg", 
-    "caption": "an image",
-    "target": "/data/vjuicefs_ai_camera_lgroup_ql/11187973/Zero2Hero/_input_dev/_data/car_turn/content/frame_0015.png"
+    "target": "/root/tongtong.tt/_code/Zero2Hero/_input_dev/_data/car_turn/mask_fill/frame_0015.png"
 }

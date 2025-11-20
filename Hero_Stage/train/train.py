@@ -1060,28 +1060,8 @@ def main(args):
                         for idx, item in enumerate(data):
                             if item["active"] == False:
                                 continue
-                            if "_2" not in args.eval_json_path:
-                                source_path = item.get("source_path")
-                                target_path = item.get("target_path")
-                                position_delta = item.get("position_delta")
-                                text = item.get("text")
-                                if item["is_metric"] == True:
-                                    gt_image = Image.open(target_path).convert("RGB")
-                                else:
-                                    gt_image = None
-                                spatial_images_ls = [Image.open(source_path).convert("RGB")]
-
-                                pipeline_args = {"prompt": text,
-                                                "spatial_images": spatial_images_ls,
-                                                "subject_images": [],
-                                                "height": args.test_h,
-                                                "width": args.test_w,
-                                                "cond_size": args.cond_size,
-                                                "guidance_scale": 3,
-                                                "num_inference_steps": 20,
-                                                "max_sequence_length": 512,
-                                                }
-                            else:
+                            
+                            if "2cond" in args.eval_json_path:
                                 source_zero = item.get("source_zero")
                                 source_tgt = item.get("source_tgt")
                                 target_path = item.get("target_path")
@@ -1103,7 +1083,27 @@ def main(args):
                                                 "num_inference_steps": 20,
                                                 "max_sequence_length": 512,
                                                 }                               
-                            
+                            elif "subinp" in args.eval_json_path:
+                                source_sbj = item.get("source_sbj")
+                                source_inp = item.get("source_inp")
+                                target_path = item.get("target_path")
+                                position_delta = item.get("position_delta")
+                                text = item.get("text")
+                                if item["is_metric"] == True:
+                                    gt_image = Image.open(target_path).convert("RGB")
+                                else:
+                                    gt_image = None
+
+                                pipeline_args = {"prompt": text,
+                                                "spatial_images": [Image.open(source_inp).convert("RGB")],
+                                                "subject_images": [Image.open(source_sbj).convert("RGB")],
+                                                "height": args.test_h,
+                                                "width": args.test_w,
+                                                "cond_size": args.cond_size,
+                                                "guidance_scale": 3,
+                                                "num_inference_steps": 20,
+                                                "max_sequence_length": 512,
+                                                }                            
                             images = log_validation(
                                 pipeline=pipeline,
                                 args=args,
